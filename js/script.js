@@ -24,12 +24,19 @@ import {
 } from "./form.js";
 
 import {
+  readExpiryDate
+} from "./ocr.js";
+
+import {
   addButton,
   cancelButton,
   itemForm,
   itemList,
   itemName,
   expiryDate,
+  expiryImage,
+  readExpiryButton,
+  ocrStatus,
   quantity,
   storage,
   memo,
@@ -139,6 +146,47 @@ cancelButton.addEventListener("click", function () {
   selectedImage = "";
 
   closeForm();
+});
+
+// 写真から賞味期限を読み取る
+readExpiryButton.addEventListener("click", async function () {
+  const file = expiryImage.files[0];
+
+  if (!file) {
+    ocrStatus.textContent = "賞味期限の写真を撮影してください";
+    return;
+  }
+
+  readExpiryButton.disabled = true;
+  ocrStatus.textContent = "読み取り中...";
+
+  try {
+    const result = await readExpiryDate(file, function (message) {
+      if (
+        message.status === "recognizing text" &&
+        typeof message.progress === "number"
+      ) {
+        const percent = Math.round(message.progress * 100);
+        ocrStatus.textContent = "読み取り中... " + percent + "%";
+      }
+    });
+
+    if (result.date) {
+      expiryDate.value = result.date;
+      ocrStatus.textContent =
+        "賞味期限を読み取りました：" + result.date;
+    } else {
+      ocrStatus.textContent =
+        "賞味期限を読み取れませんでした。日付を手動で入力してください。";
+    }
+  } catch (error) {
+    console.error(error);
+
+    ocrStatus.textContent =
+      "読み取り中にエラーが発生しました。";
+  } finally {
+    readExpiryButton.disabled = false;
+  }
 });
 
 // 保存
