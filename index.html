@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>賞味期限管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header>
+    <h1>賞味期限管理</h1>
+  </header>
+
+  <main>
+    <button id="addButton">＋ 商品を登録</button>
+
+    <section id="formSection">
+      <h2>商品登録</h2>
+
+      <form id="itemForm">
+        <div class="form-grid">
+
+          <!-- 左側 -->
+          <div class="form-column">
+            <label for="itemName">商品名</label>
+            <input type="text" id="itemName" required>
+
+            <label for="expiryDate">賞味期限</label>
+            <input type="date" id="expiryDate" required>
+
+            <label for="quantity">個数</label>
+            <input type="number" id="quantity" min="1" value="1">
+          </div>
+
+          <!-- 右側 -->
+          <div class="form-column">
+            <label for="storage">収納場所</label>
+            <select id="storage">
+              <option value="冷蔵庫">冷蔵庫</option>
+              <option value="冷凍庫">冷凍庫</option>
+              <option value="野菜室">野菜室</option>
+              <option value="棚">棚</option>
+              <option value="食品庫">食品庫</option>
+              <option value="その他">その他</option>
+            </select>
+
+            <label for="itemImage">商品写真</label>
+            <input type="file" id="itemImage" accept="image/*">
+
+            <img id="imagePreview" alt="商品写真プレビュー">
+            <button type="button" id="removeImageButton">写真を削除</button>
+
+            <label for="memo">メモ</label>
+            <textarea id="memo"></textarea>
+          </div>
+
+        </div>
+
+        <div class="form-actions">
+          <button type="submit">保存</button>
+          <button type="button" id="cancelButton">キャンセル</button>
+        </div>
+      </form>
+    </section>
+
+    <div class="expiry-summary">
+      <div class="summary-box summary-expired" data-expiry-filter="expired">
+        <span class="summary-label">期限切れ</span>
+        <span id="expiredCount">0</span>件
+      </div>
+
+      <div class="summary-box summary-danger" data-expiry-filter="danger">
+        <span class="summary-label">2日以内</span>
+        <span id="dangerCount">0</span>件
+      </div>
+
+      <div class="summary-box summary-warning" data-expiry-filter="warning">
+        <span class="summary-label">7日以内</span>
+        <span id="warningCount">0</span>件
+      </div>
+
+      <div class="summary-box summary-safe" data-expiry-filter="safe">
+        <span class="summary-label">それ以外</span>
+        <span id="safeCount">0</span>件
+      </div>
+    </div>
+
+    <section>
+      <h2>商品一覧</h2>
+
+      <div class="list-controls">
+        <input type="text" id="searchInput" placeholder="商品名を検索">
+
+        <select id="sortSelect">
+          <option value="expiry">賞味期限が近い順</option>
+          <option value="name">商品名順</option>
+        </select>
+
+        <select id="storageFilter">
+          <option value="all">すべての収納場所</option>
+          <option value="冷蔵庫">冷蔵庫</option>
+          <option value="冷凍庫">冷凍庫</option>
+          <option value="野菜室">野菜室</option>
+          <option value="棚">棚</option>
+          <option value="食品庫">食品庫</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+
+      <div id="itemList"></div>
+    </section>
+  </main>
+
+  <script type="module" src="./js/script.js"></script>
+</body>
+
+</html>

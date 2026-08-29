@@ -1,0 +1,449 @@
+/* =========================
+   基本設定
+========================= */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background-color: #f5f5f5;
+}
+
+header {
+  background-color: white;
+  padding: 16px;
+  border-bottom: 1px solid #ddd;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+section {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+section h2 {
+  margin-top: 0;
+}
+
+
+/* =========================
+   商品追加ボタン
+========================= */
+
+#addButton {
+  padding: 10px 18px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  border: none;
+  border-radius: 6px;
+  background-color: #333;
+  color: white;
+}
+
+#addButton:hover {
+  background-color: #555;
+}
+
+
+/* =========================
+   商品登録・編集フォーム
+========================= */
+
+#formSection {
+  display: none;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+#itemForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.form-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#itemForm input,
+#itemForm select,
+#itemForm textarea {
+  padding: 10px 12px;
+  font-size: 16px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background-color: white;
+}
+
+#itemForm textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+#imagePreview {
+  display: none;
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.form-actions button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+/* 保存ボタン */
+.form-actions button[type="submit"] {
+  border: none;
+  background-color: #333;
+  color: white;
+}
+
+.form-actions button[type="submit"]:hover {
+  background-color: #555;
+}
+
+/* キャンセルボタン */
+#cancelButton {
+  border: 1px solid #bbb;
+  background-color: white;
+  color: #333;
+}
+
+#cancelButton:hover {
+  background-color: #f0f0f0;
+}
+
+
+/* =========================
+   賞味期限サマリー
+========================= */
+
+.expiry-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.summary-box {
+  padding: 16px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.summary-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+#expiredCount,
+#dangerCount,
+#warningCount,
+#safeCount {
+  font-size: 24px;
+}
+
+.summary-expired {
+  background-color: #f8d7da;
+}
+
+.summary-danger {
+  background-color: #ffd59e;
+}
+
+.summary-warning {
+  background-color: #fff3cd;
+}
+
+.summary-safe {
+  background-color: #96fb90;
+}
+
+
+/* =========================
+   商品一覧の操作
+========================= */
+
+.list-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.list-controls input,
+.list-controls select {
+  padding: 10px 12px;
+  font-size: 15px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background-color: white;
+}
+
+.list-controls input {
+  flex: 1;
+}
+
+
+/* =========================
+   商品カード
+========================= */
+
+#itemList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: #fff3cd;
+  border: 1px solid #ddd;
+}
+
+.item-image {
+  width: 120px;
+  height: 120px;
+  background-color: #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.item-info {
+  flex: 1;
+}
+
+.item-info h3 {
+  margin: 0 0 10px 0;
+  font-size: 20px;
+}
+
+.item-info p {
+  margin: 6px 0;
+  line-height: 1.4;
+}
+
+.item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.item-actions button {
+  min-width: 72px;
+  padding: 9px 14px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background-color: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.item-actions button:hover {
+  background-color: #f0f0f0;
+}
+
+
+/* =========================
+   賞味期限による表示
+========================= */
+
+.item-card.expired {
+  background-color: #f8d7da;
+}
+
+.item-card.danger {
+  background-color: #ffd59e;
+}
+
+.item-card.warning {
+  background-color: #fff3cd;
+}
+
+.item-card.safe {
+  background-color: #96fb90;
+}
+
+.remaining-days {
+  font-weight: bold;
+}
+
+.remaining-expired {
+  color: #b00020;
+}
+
+.remaining-danger {
+  color: #c65d00;
+}
+
+.remaining-warning {
+  color: #8a6d00;
+}
+
+.remaining-safe {
+  color: #176b1f;
+}
+
+
+/* =========================
+   スマートフォン向け
+========================= */
+
+@media (max-width: 600px) {
+  main {
+    padding: 10px;
+  }
+
+  header h1 {
+    font-size: 20px;
+  }
+
+  section {
+    padding: 12px;
+  }
+
+  /* 商品登録フォーム */
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions button {
+    width: 100%;
+  }
+
+  #imagePreview {
+    width: 120px;
+    height: 120px;
+  }
+
+  /* 賞味期限サマリー */
+  .expiry-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* 検索・並び替え・収納場所 */
+  .list-controls {
+    flex-direction: column;
+  }
+
+  .list-controls input,
+  .list-controls select {
+    width: 100%;
+  }
+
+  /* 商品カード */
+  .item-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .item-image {
+    width: 80px;
+    height: 80px;
+  }
+
+  .item-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .item-info h3 {
+    font-size: 18px;
+  }
+
+  .item-actions {
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .item-actions button {
+    flex: 1;
+  }
+}
+
+#removeImageButton {
+  display: none;
+  width: fit-content;
+  padding: 8px 12px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background-color: white;
+  cursor: pointer;
+}
+
+#removeImageButton:hover {
+  background-color: #f0f0f0;
+}
+
+.summary-box {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.summary-box:hover {
+  transform: translateY(-2px);
+}
+
+.summary-box.active {
+  outline: 3px solid #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
