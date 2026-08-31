@@ -173,11 +173,14 @@ readExpiryButton.addEventListener("click", async function () {
 
     if (result.date) {
       expiryDate.value = result.date;
+
       ocrStatus.textContent =
         "賞味期限を読み取りました：" + result.date;
     } else {
       ocrStatus.textContent =
-        "賞味期限を読み取れませんでした。日付を手動で入力してください。";
+        "読み取り結果：" +
+        result.text +
+        " / 賞味期限を特定できませんでした。";
     }
   } catch (error) {
     console.error(error);
