@@ -1,9 +1,22 @@
 /* =========================
    基本設定
 ========================= */
-
 * {
   box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
 }
 
 body {
@@ -360,6 +373,13 @@ section h2 {
     gap: 12px;
   }
 
+  #itemForm input,
+  #itemForm select,
+  #itemForm textarea {
+    width: 100%;
+    min-width: 0;
+  }
+
   .form-actions {
     flex-direction: column;
   }
@@ -446,4 +466,11 @@ section h2 {
 .summary-box.active {
   outline: 3px solid #333;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+#ocrStatus {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
 }
