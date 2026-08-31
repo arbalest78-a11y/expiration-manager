@@ -157,8 +157,7 @@ export async function readExpiryDate(
   const worker =
     await window.Tesseract.createWorker(
       "eng",
-      1,
-      {
+      1, {
         logger: function (message) {
           if (onProgress) {
             onProgress(message);
@@ -171,14 +170,15 @@ export async function readExpiryDate(
 
     // 日付に必要な文字を中心にOCR
     await worker.setParameters({
-      tessedit_char_whitelist:
-        "0123456789./-年月日 ",
-      tessedit_pageseg_mode:
-        window.Tesseract.PSM.SPARSE_TEXT
+      tessedit_char_whitelist: "0123456789./-年月日 ",
+      tessedit_pageseg_mode: window.Tesseract.PSM.SINGLE_LINE
     });
 
+    const processedImage =
+      await preprocessImage(file);
+
     const result =
-      await worker.recognize(file);
+      await worker.recognize(processedImage);
 
     console.log(
       "OCR結果:",
@@ -203,4 +203,71 @@ export async function readExpiryDate(
     await worker.terminate();
 
   }
+}
+
+async function preprocessImage(file) {
+  const image = new Image();
+  const imageUrl = URL.createObjectURL(file);
+
+  return new Promise(function (resolve, reject) {
+    image.onload = function () {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      // 画像中央の横長部分を切り出す
+      const cropWidth = image.width * 0.85;
+      const cropHeight = image.height * 0.25;
+
+      const cropX = image.width * 0.075;
+      const cropY = image.height * 0.35;
+
+      // 3倍に拡大
+      canvas.width = Math.round(cropWidth * 3);
+      canvas.height = Math.round(cropHeight * 3);
+
+      ctx.drawImage(
+        image,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      // 白黒化して文字を目立たせる
+      const imageData = ctx.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      const data = imageData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const gray =
+          data[i] * 0.299 +
+          data[i + 1] * 0.587 +
+          data[i + 2] * 0.114;
+
+        const value = gray < 170 ? 0 : 255;
+
+        data[i] = value;
+        data[i + 1] = value;
+        data[i + 2] = value;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+
+      URL.revokeObjectURL(imageUrl);
+
+      resolve(canvas);
+    };
+
+    image.onerror = reject;
+    image.src = imageUrl;
+  });
 }
