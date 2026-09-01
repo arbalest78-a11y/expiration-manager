@@ -28,18 +28,17 @@
               <label for="expiryDate">賞味期限</label>
               <input type="date" id="expiryDate" required />
 
-              <label for="expiryImage">賞味期限を撮影</label>
-              <input
-                type="file"
-                id="expiryImage"
-                accept="image/*"
-              />
+              <div id="ocrSection">
+                <label for="expiryImage">賞味期限を撮影</label>
 
-              <button type="button" id="readExpiryButton">
-                写真から賞味期限を読み取る
-              </button>
+                <input type="file" id="expiryImage" accept="image/*" />
 
-              <p id="ocrStatus"></p>
+                <button type="button" id="readExpiryButton">
+                  写真から賞味期限を読み取る
+                </button>
+
+                <p id="ocrStatus"></p>
+              </div>
 
               <label for="quantity">個数</label>
               <input type="number" id="quantity" min="1" value="1" />
