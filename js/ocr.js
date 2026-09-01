@@ -214,30 +214,23 @@ async function preprocessImage(file) {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
 
-      // 画像中央の横長部分を切り出す
-      const cropWidth = image.width * 0.85;
-      const cropHeight = image.height * 0.25;
-
-      const cropX = image.width * 0.075;
-      const cropY = image.height * 0.35;
-
-      // 3倍に拡大
-      canvas.width = Math.round(cropWidth * 3);
-      canvas.height = Math.round(cropHeight * 3);
+      // 画像全体を2倍に拡大
+      canvas.width = image.width * 2;
+      canvas.height = image.height * 2;
 
       ctx.drawImage(
         image,
-        cropX,
-        cropY,
-        cropWidth,
-        cropHeight,
+        0,
+        0,
+        image.width,
+        image.height,
         0,
         0,
         canvas.width,
         canvas.height
       );
 
-      // 白黒化して文字を目立たせる
+      // グレースケール化
       const imageData = ctx.getImageData(
         0,
         0,
@@ -253,11 +246,9 @@ async function preprocessImage(file) {
           data[i + 1] * 0.587 +
           data[i + 2] * 0.114;
 
-        const value = gray < 170 ? 0 : 255;
-
-        data[i] = value;
-        data[i + 1] = value;
-        data[i + 2] = value;
+        data[i] = gray;
+        data[i + 1] = gray;
+        data[i + 2] = gray;
       }
 
       ctx.putImageData(imageData, 0, 0);
@@ -267,7 +258,11 @@ async function preprocessImage(file) {
       resolve(canvas);
     };
 
-    image.onerror = reject;
+    image.onerror = function (error) {
+      URL.revokeObjectURL(imageUrl);
+      reject(error);
+    };
+
     image.src = imageUrl;
   });
 }
