@@ -171,7 +171,7 @@ export async function readExpiryDate(
     // 日付に必要な文字を中心にOCR
     await worker.setParameters({
       tessedit_char_whitelist: "0123456789./-年月日 ",
-      tessedit_pageseg_mode: window.Tesseract.PSM.SINGLE_LINE
+      tessedit_pageseg_mode: window.Tesseract.PSM.SPARSE_TEXT
     });
 
     const processedImage =
