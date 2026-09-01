@@ -474,3 +474,11 @@ section h2 {
   word-break: break-word;
   line-height: 1.5;
 }
+
+/* =========================
+   OCR機能（一時保留）
+========================= */
+
+#ocrSection {
+  display: none;
+}
