@@ -52,7 +52,6 @@ section h2 {
   margin-top: 0;
 }
 
-
 /* =========================
    商品追加ボタン
 ========================= */
@@ -71,7 +70,6 @@ section h2 {
 #addButton:hover {
   background-color: #555;
 }
-
 
 /* =========================
    商品登録・編集フォーム
@@ -140,13 +138,13 @@ section h2 {
 }
 
 /* 保存ボタン */
-.form-actions button[type="submit"] {
+.form-actions button[type='submit'] {
   border: none;
   background-color: #333;
   color: white;
 }
 
-.form-actions button[type="submit"]:hover {
+.form-actions button[type='submit']:hover {
   background-color: #555;
 }
 
@@ -160,7 +158,6 @@ section h2 {
 #cancelButton:hover {
   background-color: #f0f0f0;
 }
-
 
 /* =========================
    賞味期限サマリー
@@ -210,7 +207,6 @@ section h2 {
   background-color: #96fb90;
 }
 
-
 /* =========================
    商品一覧の操作
 ========================= */
@@ -233,7 +229,6 @@ section h2 {
 .list-controls input {
   flex: 1;
 }
-
 
 /* =========================
    商品カード
@@ -308,7 +303,6 @@ section h2 {
   background-color: #f0f0f0;
 }
 
-
 /* =========================
    賞味期限による表示
 ========================= */
@@ -348,7 +342,6 @@ section h2 {
 .remaining-safe {
   color: #176b1f;
 }
-
 
 /* =========================
    スマートフォン向け
@@ -438,6 +431,54 @@ section h2 {
   .item-actions button {
     flex: 1;
   }
+
+  /* スマホ表示を少しコンパクトにする */
+  section h2 {
+    font-size: 24px;
+    margin-bottom: 16px;
+  }
+
+  #itemForm {
+    gap: 6px;
+  }
+
+  #itemForm input,
+  #itemForm select,
+  #itemForm textarea {
+    padding: 8px 10px;
+    font-size: 15px;
+  }
+
+  .item-card {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .item-info h3 {
+    font-size: 17px;
+    margin-bottom: 6px;
+  }
+
+  .item-info p {
+    margin: 4px 0;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  .summary-box {
+    padding: 12px;
+  }
+
+  .summary-label {
+    margin-bottom: 4px;
+  }
+
+  #expiredCount,
+  #dangerCount,
+  #warningCount,
+  #safeCount {
+    font-size: 21px;
+  }
 }
 
 #removeImageButton {
@@ -481,4 +522,25 @@ section h2 {
 
 #ocrSection {
   display: none;
+}
+
+/* =========================
+   フォームの必須・任意表示
+========================= */
+
+.required {
+  font-size: 12px;
+  font-weight: bold;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: #f8d7da;
+}
+
+.optional {
+  font-size: 12px;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: #eeeeee;
 }
