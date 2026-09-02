@@ -1,6 +1,7 @@
 import {
   formSection,
   itemForm,
+  itemList,
   itemName,
   expiryDate,
   quantity,
@@ -73,4 +74,9 @@ export function closeForm() {
   clearImagePreview();
 
   formSection.querySelector("h2").textContent = "商品登録";
+
+  itemList.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
 }
