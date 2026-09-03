@@ -3,7 +3,8 @@ export const formSection = document.getElementById("formSection");
 export const cancelButton = document.getElementById("cancelButton");
 export const itemForm = document.getElementById("itemForm");
 export const itemList = document.getElementById("itemList");
-
+export const displayCount =
+  document.getElementById("displayCount");
 export const itemName = document.getElementById("itemName");
 export const expiryDate = document.getElementById("expiryDate");
 
@@ -21,7 +22,8 @@ export const searchInput = document.getElementById("searchInput");
 export const sortSelect = document.getElementById("sortSelect");
 export const storageFilter =
   document.getElementById("storageFilter");
-
+export const clearFilterButton =
+  document.getElementById("clearFilterButton");
 export const expiredCount =
   document.getElementById("expiredCount");
 export const dangerCount =
