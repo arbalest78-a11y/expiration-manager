@@ -1,313 +1,268 @@
-import {
-  loadItems,
-  saveItems
-} from "./storage.js";
-
-import {
-  filterAndSortItems
-} from "./filter.js";
-
-import {
-  getSummaryCounts
-} from "./summary.js";
-
-import {
-  createItemCard
-} from "./card.js";
-
-import {
-  showImagePreview,
-  clearImagePreview,
-  openRegistrationForm,
-  openEditFormUI,
-  closeForm
-} from "./form.js";
-
-import {
-  readExpiryDate
-} from "./ocr.js";
-
-import {
-  addButton,
-  cancelButton,
-  itemForm,
-  itemList,
-  itemName,
-  expiryDate,
-  expiryImage,
-  readExpiryButton,
-  ocrStatus,
-  quantity,
-  storage,
-  memo,
-  itemImage,
-  removeImageButton,
-  searchInput,
-  sortSelect,
-  storageFilter,
-  expiredCount,
-  dangerCount,
-  warningCount,
-  safeCount,
-  summaryBoxes
-} from "./dom.js";
-
 // =========================
-// データ
+// OCRで読み取った文字から日付を探す
 // =========================
 
-// 保存されている商品を読み込む
-let items = loadItems();
-let editingId = null;
-let selectedImage = "";
-let expiryFilter = "all";
+function findDate(text) {
+  const normalizedText = text
+    // 全角数字 → 半角数字
+    .replace(/[０-９]/g, function (char) {
+      return String.fromCharCode(
+        char.charCodeAt(0) - 0xFEE0
+      );
+    })
 
-// =========================
-// 初期表示
-// =========================
+    // 全角記号などを統一
+    .replace(/[．。]/g, ".")
+    .replace(/[／]/g, "/")
+    .replace(/[－ー−]/g, "-")
 
-renderItems();
-updateSummary();
+    // OCRでよくある数字の誤認識を補正
+    .replace(/[Oo]/g, "0")
+    .replace(/[Il|]/g, "1");
 
-// =========================
-// イベント
-// =========================
+  console.log("OCR補正前:", text);
+  console.log("OCR補正後:", normalizedText);
 
-// 商品名検索
-searchInput.addEventListener("input", function () {
-  renderItems();
-});
+  // =========================
+  // ① YYYY/MM/DD
+  //    YYYY.MM.DD
+  //    YYYY-MM-DD
+  //    YYYY年MM月DD日
+  // =========================
 
-// 並び替え
-sortSelect.addEventListener("change", function () {
-  renderItems();
-});
-
-// 収納場所で絞り込み
-storageFilter.addEventListener("change", function () {
-  renderItems();
-});
-
-// 賞味期限サマリーで絞り込み
-summaryBoxes.forEach(function (box) {
-  box.addEventListener("click", function () {
-
-    const selectedFilter = box.dataset.expiryFilter;
-
-    // 同じものをもう一度押したら解除
-    if (expiryFilter === selectedFilter) {
-      expiryFilter = "all";
-    } else {
-      expiryFilter = selectedFilter;
-    }
-
-    updateSummarySelection();
-    renderItems();
-  });
-});
-
-// 商品写真を読み込む
-itemImage.addEventListener("change", function () {
-  const file = itemImage.files[0];
-
-  if (!file) {
-    return;
-  }
-
-  const reader = new FileReader();
-
-  reader.addEventListener("load", function () {
-    selectedImage = reader.result;
-
-    showImagePreview(selectedImage);
-  });
-
-  reader.readAsDataURL(file);
-});
-
-// 選択・登録済みの写真を削除
-removeImageButton.addEventListener("click", function () {
-  selectedImage = "";
-
-  clearImagePreview();
-});
-
-// 商品登録フォームを表示
-addButton.addEventListener("click", function () {
-  editingId = null;
-  selectedImage = "";
-
-  openRegistrationForm();
-});
-
-// キャンセル
-cancelButton.addEventListener("click", function () {
-  editingId = null;
-  selectedImage = "";
-
-  closeForm();
-});
-
-// 写真から賞味期限を読み取る
-readExpiryButton.addEventListener("click", async function () {
-  const file = expiryImage.files[0];
-
-  if (!file) {
-    ocrStatus.textContent = "賞味期限の写真を撮影してください";
-    return;
-  }
-
-  readExpiryButton.disabled = true;
-  ocrStatus.textContent = "読み取り中...";
-
-  try {
-    const result = await readExpiryDate(file, function (message) {
-      if (
-        message.status === "recognizing text" &&
-        typeof message.progress === "number"
-      ) {
-        const percent = Math.round(message.progress * 100);
-        ocrStatus.textContent = "読み取り中... " + percent + "%";
-      }
-    });
-
-    if (result.date) {
-      expiryDate.value = result.date;
-
-      ocrStatus.textContent =
-        "賞味期限を読み取りました：" + result.date;
-    } else {
-      ocrStatus.textContent =
-        "読み取り結果：" +
-        result.text +
-        " / 賞味期限を特定できませんでした。";
-    }
-  } catch (error) {
-    console.error(error);
-
-    ocrStatus.textContent =
-      "読み取り中にエラーが発生しました。";
-  } finally {
-    readExpiryButton.disabled = false;
-  }
-});
-
-// 保存
-itemForm.addEventListener("submit", function (event) {
-  event.preventDefault();
-
-  if (editingId === null) {
-    const item = {
-      id: Date.now(),
-      name: itemName.value,
-      expiry: expiryDate.value,
-      quantity: quantity.value,
-      storage: storage.value,
-      memo: memo.value,
-      image: selectedImage
-    };
-
-    items.push(item);
-  } else {
-    const item = items.find(function (savedItem) {
-      return savedItem.id === editingId;
-    });
-
-    if (item) {
-      item.name = itemName.value;
-      item.expiry = expiryDate.value;
-      item.quantity = quantity.value;
-      item.storage = storage.value;
-      item.memo = memo.value;
-      item.image = selectedImage;
-    }
-  }
-
-  saveItems(items);
-  renderItems();
-  updateSummary();
-
-  editingId = null;
-  selectedImage = "";
-
-  closeForm();
-});
-
-// 商品一覧を表示
-function renderItems() {
-  itemList.innerHTML = "";
-
-  const filteredItems = filterAndSortItems(
-    items,
-    searchInput.value,
-    storageFilter.value,
-    expiryFilter,
-    sortSelect.value
+  const fullDateMatch = normalizedText.match(
+    /(20\d{2})\s*[./\-年]\s*(0?[1-9]|1[0-2])\s*[./\-月]\s*(0?[1-9]|[12]\d|3[01])\s*日?/
   );
 
-  if (filteredItems.length === 0) {
-    const message = document.createElement("p");
-    message.textContent = "該当する商品がありません";
-    itemList.appendChild(message);
-    return;
+  if (fullDateMatch) {
+    const year = Number(fullDateMatch[1]);
+    const month = Number(fullDateMatch[2]);
+    const day = Number(fullDateMatch[3]);
+
+    const date = formatDate(year, month, day);
+
+    if (date) {
+      return date;
+    }
   }
 
-  filteredItems.forEach(function (item) {
-    const card = createItemCard(
-      item,
-      openEditForm,
-      deleteItem
+  // =========================
+  // ② YYYY/MM
+  //    YYYY.MM
+  //    YYYY-MM
+  //    YYYY年MM月
+  //
+  // 日がない場合は月末にする
+  // 例：2027.07 → 2027-07-31
+  // =========================
+
+  const yearMonthMatch = normalizedText.match(
+    /(20\d{2})\s*[./\-年]\s*(0?[1-9]|1[0-2])\s*月?/
+  );
+
+  if (yearMonthMatch) {
+    const year = Number(yearMonthMatch[1]);
+    const month = Number(yearMonthMatch[2]);
+
+    return formatYearMonth(year, month);
+  }
+
+  // =========================
+  // ③ YY/MM/DD
+  //    YY.MM.DD
+  //    YY-MM-DD
+  // =========================
+
+  const shortDateMatch = normalizedText.match(
+    /(?:^|\s)(\d{2})\s*[./\-]\s*(0?[1-9]|1[0-2])\s*[./\-]\s*(0?[1-9]|[12]\d|3[01])(?:\s|$)/
+  );
+
+  if (shortDateMatch) {
+    const year = 2000 + Number(shortDateMatch[1]);
+    const month = Number(shortDateMatch[2]);
+    const day = Number(shortDateMatch[3]);
+
+    const date = formatDate(year, month, day);
+
+    if (date) {
+      return date;
+    }
+  }
+
+  return null;
+}
+
+
+// =========================
+// YYYY-MM-DD形式に変換
+// =========================
+
+function formatDate(year, month, day) {
+  const date = new Date(
+    year,
+    month - 1,
+    day
+  );
+
+  // 存在しない日付を除外
+  // 例：2027/02/31
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return (
+    String(year).padStart(4, "0") +
+    "-" +
+    String(month).padStart(2, "0") +
+    "-" +
+    String(day).padStart(2, "0")
+  );
+}
+
+
+// =========================
+// 年月だけの場合は月末日にする
+// =========================
+
+function formatYearMonth(year, month) {
+
+  // 翌月の0日 = 今月の最終日
+  const lastDay = new Date(
+    year,
+    month,
+    0
+  ).getDate();
+
+  return formatDate(
+    year,
+    month,
+    lastDay
+  );
+}
+
+
+// =========================
+// 画像から賞味期限を読み取る
+// =========================
+
+export async function readExpiryDate(
+  file,
+  onProgress
+) {
+
+  const worker =
+    await window.Tesseract.createWorker(
+      "eng",
+      1, {
+        logger: function (message) {
+          if (onProgress) {
+            onProgress(message);
+          }
+        }
+      }
     );
 
-    itemList.appendChild(card);
-  });
-}
+  try {
 
-// 賞味期限の件数を表示
-function updateSummary() {
-  const counts = getSummaryCounts(items);
-
-  expiredCount.textContent = counts.expired;
-  dangerCount.textContent = counts.danger;
-  warningCount.textContent = counts.warning;
-  safeCount.textContent = counts.safe;
-}
-
-// =========================
-// 商品カード
-// =========================
-
-function openEditForm(item) {
-  editingId = item.id;
-  selectedImage = item.image || "";
-
-  openEditFormUI(item);
-}
-
-function deleteItem(item) {
-  const result = confirm("この商品を削除しますか？");
-
-  if (result) {
-    items = items.filter(function (savedItem) {
-      return savedItem.id !== item.id;
+    // 日付に必要な文字を中心にOCR
+    await worker.setParameters({
+      tessedit_char_whitelist: "0123456789./-年月日 ",
+      tessedit_pageseg_mode: window.Tesseract.PSM.SPARSE_TEXT
     });
 
-    saveItems(items);
-    renderItems();
-    updateSummary();
+    const processedImage =
+      await preprocessImage(file);
+
+    const result =
+      await worker.recognize(processedImage);
+
+    console.log(
+      "OCR結果:",
+      result.data.text
+    );
+
+    const date =
+      findDate(result.data.text);
+
+    console.log(
+      "検出した賞味期限:",
+      date
+    );
+
+    return {
+      text: result.data.text,
+      date: date
+    };
+
+  } finally {
+
+    await worker.terminate();
+
   }
 }
 
-// 選択中のサマリーを表示
-function updateSummarySelection() {
+async function preprocessImage(file) {
+  const image = new Image();
+  const imageUrl = URL.createObjectURL(file);
 
-  summaryBoxes.forEach(function (box) {
+  return new Promise(function (resolve, reject) {
+    image.onload = function () {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
 
-    if (box.dataset.expiryFilter === expiryFilter) {
-      box.classList.add("active");
-    } else {
-      box.classList.remove("active");
-    }
+      // 画像全体を2倍に拡大
+      canvas.width = image.width * 2;
+      canvas.height = image.height * 2;
 
+      ctx.drawImage(
+        image,
+        0,
+        0,
+        image.width,
+        image.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      // グレースケール化
+      const imageData = ctx.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      const data = imageData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const gray =
+          data[i] * 0.299 +
+          data[i + 1] * 0.587 +
+          data[i + 2] * 0.114;
+
+        data[i] = gray;
+        data[i + 1] = gray;
+        data[i + 2] = gray;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+
+      URL.revokeObjectURL(imageUrl);
+
+      resolve(canvas);
+    };
+
+    image.onerror = function (error) {
+      URL.revokeObjectURL(imageUrl);
+      reject(error);
+    };
+
+    image.src = imageUrl;
   });
 }
