@@ -509,21 +509,6 @@ section h2 {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
-#ocrStatus {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  line-height: 1.5;
-}
-
-/* =========================
-   OCR機能（一時保留）
-========================= */
-
-#ocrSection {
-  display: none;
-}
-
 /* =========================
    フォームの必須・任意表示
 ========================= */
