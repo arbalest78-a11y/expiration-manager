@@ -7,10 +7,6 @@ export const itemList = document.getElementById("itemList");
 export const itemName = document.getElementById("itemName");
 export const expiryDate = document.getElementById("expiryDate");
 
-export const expiryImage = document.getElementById("expiryImage");
-export const readExpiryButton = document.getElementById("readExpiryButton");
-export const ocrStatus = document.getElementById("ocrStatus");
-
 export const quantity = document.getElementById("quantity");
 
 export const storage = document.getElementById("storage");
