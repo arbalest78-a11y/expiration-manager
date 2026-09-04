@@ -18,6 +18,12 @@ export const imagePreview = document.getElementById("imagePreview");
 export const removeImageButton =
   document.getElementById("removeImageButton");
 
+export const ocrButton =
+  document.getElementById("ocrButton");
+
+export const ocrStatus =
+  document.getElementById("ocrStatus");
+
 export const searchInput = document.getElementById("searchInput");
 export const sortSelect = document.getElementById("sortSelect");
 export const storageFilter =

@@ -36,6 +36,8 @@ import {
   memo,
   itemImage,
   removeImageButton,
+  ocrButton,
+  ocrStatus,
   searchInput,
   sortSelect,
   storageFilter,
@@ -116,6 +118,7 @@ itemImage.addEventListener("change", function () {
   const file = itemImage.files[0];
 
   if (!file) {
+    ocrButton.disabled = true;
     return;
   }
 
@@ -123,11 +126,29 @@ itemImage.addEventListener("change", function () {
 
   reader.addEventListener("load", function () {
     selectedImage = reader.result;
-
     showImagePreview(selectedImage);
+
+    // 写真を選択したらOCRボタンを使えるようにする
+    ocrButton.disabled = false;
+    ocrStatus.textContent = "";
   });
 
   reader.readAsDataURL(file);
+});
+
+// OCRボタン
+ocrButton.addEventListener("click", function () {
+  // Pythonから返ってきたと仮定したテストデータ
+  const mockResult = {
+    name: "牛乳",
+    expiry: "2026-09-10"
+  };
+
+  itemName.value = mockResult.name;
+  expiryDate.value = mockResult.expiry;
+
+  ocrStatus.textContent =
+    "テスト用OCR結果を入力しました。";
 });
 
 // 選択・登録済みの写真を削除
@@ -135,12 +156,18 @@ removeImageButton.addEventListener("click", function () {
   selectedImage = "";
 
   clearImagePreview();
+
+  ocrButton.disabled = true;
+  ocrStatus.textContent = "";
 });
 
 // 商品登録フォームを表示
 addButton.addEventListener("click", function () {
   editingId = null;
   selectedImage = "";
+
+  ocrButton.disabled = true;
+  ocrStatus.textContent = "";
 
   openRegistrationForm();
 });
@@ -149,6 +176,9 @@ addButton.addEventListener("click", function () {
 cancelButton.addEventListener("click", function () {
   editingId = null;
   selectedImage = "";
+
+  ocrButton.disabled = true;
+  ocrStatus.textContent = "";
 
   closeForm();
 });
