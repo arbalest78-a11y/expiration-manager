@@ -24,6 +24,10 @@ import {
 } from "./form.js";
 
 import {
+  requestOcr
+} from "./ocr-api.js";
+
+import {
   addButton,
   cancelButton,
   itemForm,
@@ -48,6 +52,10 @@ import {
   safeCount,
   summaryBoxes
 } from "./dom.js";
+
+import {
+  readExpiryDate
+} from "./ocr.js";
 
 // =========================
 // データ
@@ -137,18 +145,41 @@ itemImage.addEventListener("change", function () {
 });
 
 // OCRボタン
-ocrButton.addEventListener("click", function () {
-  // Pythonから返ってきたと仮定したテストデータ
-  const mockResult = {
-    name: "牛乳",
-    expiry: "2026-09-10"
-  };
+ocrButton.addEventListener("click", async function () {
+  const file = itemImage.files[0];
 
-  itemName.value = mockResult.name;
-  expiryDate.value = mockResult.expiry;
+  if (!file) {
+    ocrStatus.textContent = "画像を選択してください。";
+    return;
+  }
 
-  ocrStatus.textContent =
-    "テスト用OCR結果を入力しました。";
+  ocrButton.disabled = true;
+  ocrStatus.textContent = "画像を読み取っています...";
+
+  try {
+    const result = await requestOcr(file);
+
+    console.log("Python OCR結果:", result);
+
+    if (result.name) {
+      itemName.value = result.name;
+    }
+
+    if (result.expiry) {
+      expiryDate.value = result.expiry;
+    }
+
+    ocrStatus.textContent =
+      "画像の読み取りが完了しました。";
+
+  } catch (error) {
+    console.error(error);
+
+    ocrStatus.textContent =
+      "画像の読み取りに失敗しました。";
+  } finally {
+    ocrButton.disabled = false;
+  }
 });
 
 // 選択・登録済みの写真を削除
