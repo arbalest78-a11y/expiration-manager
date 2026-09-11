@@ -60,7 +60,7 @@ section h2 {
   padding: 10px 18px;
   font-size: 16px;
   cursor: pointer;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   border: none;
   border-radius: 6px;
   background-color: #333;
@@ -499,6 +499,14 @@ section h2 {
   #safeCount {
     font-size: 21px;
   }
+
+  .backup-controls {
+    flex-direction: column;
+  }
+
+  .backup-controls button {
+    width: 100%;
+  }
 }
 
 #removeImageButton {
@@ -548,4 +556,27 @@ section h2 {
   padding: 2px 6px;
   border-radius: 4px;
   background-color: #eeeeee;
+}
+
+/* =========================
+   バックアップ操作
+========================= */
+
+.backup-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.backup-controls button {
+  padding: 10px 14px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background-color: white;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.backup-controls button:hover {
+  background-color: #f0f0f0;
 }

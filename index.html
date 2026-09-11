@@ -14,7 +14,18 @@
 
     <main>
       <button id="addButton">＋ 商品を登録</button>
+      <div class="backup-controls">
+        <button type="button" id="exportButton">データを書き出す</button>
 
+        <button type="button" id="importButton">データを読み込む</button>
+
+        <input
+          type="file"
+          id="importFile"
+          accept=".json,application/json"
+          hidden
+        />
+      </div>
       <section id="formSection">
         <h2>商品登録</h2>
 

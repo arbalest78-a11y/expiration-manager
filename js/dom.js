@@ -41,3 +41,12 @@ export const safeCount =
 
 export const summaryBoxes =
   document.querySelectorAll(".summary-box");
+
+export const exportButton =
+  document.getElementById("exportButton");
+
+export const importButton =
+  document.getElementById("importButton");
+
+export const importFile =
+  document.getElementById("importFile");

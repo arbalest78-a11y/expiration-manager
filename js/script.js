@@ -1,6 +1,8 @@
 import {
   loadItems,
-  saveItems
+  saveItems,
+  exportItems,
+  importItems
 } from "./storage.js";
 
 import {
@@ -50,7 +52,10 @@ import {
   dangerCount,
   warningCount,
   safeCount,
-  summaryBoxes
+  summaryBoxes,
+  exportButton,
+  importButton,
+  importFile
 } from "./dom.js";
 
 import {
@@ -297,6 +302,58 @@ function updateSummary() {
   warningCount.textContent = counts.warning;
   safeCount.textContent = counts.safe;
 }
+
+// バックアップデータを書き出す
+exportButton.addEventListener("click", function () {
+  exportItems(items);
+});
+
+
+// バックアップデータを選択
+importButton.addEventListener("click", function () {
+  importFile.click();
+});
+
+
+// バックアップデータを読み込む
+importFile.addEventListener("change", async function () {
+  const file = importFile.files[0];
+
+  if (!file) {
+    return;
+  }
+
+  try {
+    const importedItems = await importItems(file);
+
+    const result = confirm(
+      "現在の商品データを、読み込んだバックアップデータで置き換えますか？"
+    );
+
+    if (!result) {
+      return;
+    }
+
+    items = importedItems;
+
+    saveItems(items);
+
+    renderItems();
+    updateSummary();
+
+    alert("バックアップデータを読み込みました。");
+
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      "バックアップデータの読み込みに失敗しました。"
+    );
+
+  } finally {
+    importFile.value = "";
+  }
+});
 
 // =========================
 // 商品カード
