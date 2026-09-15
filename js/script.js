@@ -44,6 +44,12 @@ import {
   removeImageButton,
   ocrButton,
   ocrStatus,
+  startCameraButton,
+  cameraArea,
+  cameraVideo,
+  captureButton,
+  stopCameraButton,
+  cameraCanvas,
   searchInput,
   sortSelect,
   storageFilter,
@@ -71,6 +77,9 @@ let items = loadItems();
 let editingId = null;
 let selectedImage = "";
 let expiryFilter = "all";
+
+let cameraStream = null;
+let ocrFile = null;
 
 // =========================
 // 初期表示
@@ -135,6 +144,8 @@ itemImage.addEventListener("change", function () {
     return;
   }
 
+  ocrFile = file;
+
   const reader = new FileReader();
 
   reader.addEventListener("load", function () {
@@ -149,9 +160,122 @@ itemImage.addEventListener("change", function () {
   reader.readAsDataURL(file);
 });
 
+// =========================
+// カメラ
+// =========================
+
+// カメラを起動
+startCameraButton.addEventListener(
+  "click",
+  async function () {
+    try {
+      cameraStream =
+        await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: {
+              ideal: "environment"
+            }
+          },
+          audio: false
+        });
+
+      cameraVideo.srcObject = cameraStream;
+      cameraArea.hidden = false;
+
+      ocrStatus.textContent =
+        "賞味期限をカメラに映してください。";
+
+    } catch (error) {
+      console.error(error);
+
+      ocrStatus.textContent =
+        "カメラを起動できませんでした。";
+    }
+  }
+);
+
+
+// 撮影
+captureButton.addEventListener(
+  "click",
+  function () {
+    const context =
+      cameraCanvas.getContext("2d");
+
+    cameraCanvas.width =
+      cameraVideo.videoWidth;
+
+    cameraCanvas.height =
+      cameraVideo.videoHeight;
+
+    context.drawImage(
+      cameraVideo,
+      0,
+      0,
+      cameraCanvas.width,
+      cameraCanvas.height
+    );
+
+    selectedImage =
+      cameraCanvas.toDataURL("image/jpeg");
+
+    showImagePreview(selectedImage);
+
+    cameraCanvas.toBlob(
+      function (blob) {
+        if (!blob) {
+          return;
+        }
+
+        ocrFile = new File(
+          [blob],
+          "camera.jpg", {
+            type: "image/jpeg"
+          }
+        );
+
+        ocrButton.disabled = false;
+
+        ocrStatus.textContent =
+          "撮影しました。画像から読み取れます。";
+      },
+      "image/jpeg",
+      0.9
+    );
+
+    stopCamera();
+  }
+);
+
+
+// カメラを閉じる
+stopCameraButton.addEventListener(
+  "click",
+  function () {
+    stopCamera();
+  }
+);
+
+
+// カメラ停止
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream
+      .getTracks()
+      .forEach(function (track) {
+        track.stop();
+      });
+
+    cameraStream = null;
+  }
+
+  cameraVideo.srcObject = null;
+  cameraArea.hidden = true;
+}
+
 // OCRボタン
 ocrButton.addEventListener("click", async function () {
-  const file = itemImage.files[0];
+  const file = ocrFile;
 
   if (!file) {
     ocrStatus.textContent = "画像を選択してください。";

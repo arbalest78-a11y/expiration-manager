@@ -69,6 +69,20 @@
                 capture="environment"
               />
 
+              <button type="button" id="startCameraButton">カメラを起動</button>
+
+              <div id="cameraArea" hidden>
+                <video id="cameraVideo" autoplay playsinline></video>
+
+                <button type="button" id="captureButton">撮影</button>
+
+                <button type="button" id="stopCameraButton">
+                  カメラを閉じる
+                </button>
+              </div>
+
+              <canvas id="cameraCanvas" hidden></canvas>
+
               <img id="imagePreview" alt="商品写真プレビュー" />
               <button type="button" id="removeImageButton">写真を削除</button>
 

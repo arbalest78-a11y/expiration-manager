@@ -28,14 +28,14 @@ def ocr():
         # 画像中央付近の賞味期限部分を切り出す
         width, height = image.size
 
-        image = image.crop(
-            (
-                int(width * 0.25),  # 左
-                int(height * 0.25),  # 上
-                int(width * 0.75),  # 右
-                int(height * 0.60),  # 下
-            )
-        )
+        #image = image.crop(
+        #    (
+        #        int(width * 0.25),  # 左
+        #        int(height * 0.25),  # 上
+        #        int(width * 0.75),  # 右
+        #        int(height * 0.60),  # 下
+        #    )
+        #)
 
         # 小さい文字を読みやすくするため3倍に拡大
         width, height = image.size

@@ -50,3 +50,21 @@ export const importButton =
 
 export const importFile =
   document.getElementById("importFile");
+
+export const startCameraButton =
+  document.getElementById("startCameraButton");
+
+export const cameraArea =
+  document.getElementById("cameraArea");
+
+export const cameraVideo =
+  document.getElementById("cameraVideo");
+
+export const captureButton =
+  document.getElementById("captureButton");
+
+export const stopCameraButton =
+  document.getElementById("stopCameraButton");
+
+export const cameraCanvas =
+  document.getElementById("cameraCanvas");

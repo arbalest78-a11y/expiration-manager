@@ -24,7 +24,14 @@ export function exportItems(items) {
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = "expiration-items-backup.json";
+
+  const today = new Date();
+
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  link.download = `expiration-items-backup-${year}-${month}-${day}.json`;
 
   document.body.appendChild(link);
   link.click();
