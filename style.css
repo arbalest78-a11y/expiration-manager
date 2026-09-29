@@ -580,3 +580,35 @@ section h2 {
 .backup-controls button:hover {
   background-color: #f0f0f0;
 }
+
+/* =========================
+   スマホ対応
+   ========================= */
+
+img,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+#cropArea {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#cropCanvas {
+  display: block;
+  width: 100%;
+  max-width: 700px;
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
