@@ -5,6 +5,59 @@ import pytesseract
 import re
 import calendar
 
+
+def parse_expiry_date(text):
+    text = text.strip().replace(" ", "")
+
+    patterns = [
+        # 2026.09.20
+        (
+            r"(20\d{2})[./-](\d{1,2})[./-](\d{1,2})",
+            False,
+        ),
+
+        # 26.09.20
+        # 前後にOCRの余計な数字があっても、
+        # 途中の「26.09.20」を拾えるようにする
+        (
+            r"(\d{2})[./-](\d{1,2})[./-](\d{1,2})",
+            True,
+        ),
+
+        # 2609.20
+        (
+            r"(\d{2})(\d{2})[./-](\d{1,2})",
+            True,
+        ),
+    ]
+
+    for pattern, short_year in patterns:
+        match = re.search(pattern, text)
+
+        if not match:
+            continue
+
+        year = int(match.group(1))
+
+        if short_year:
+            year += 2000
+
+        month = int(match.group(2))
+        day = int(match.group(3))
+
+        if not 1 <= month <= 12:
+            continue
+
+        max_day = calendar.monthrange(year, month)[1]
+
+        if not 1 <= day <= max_day:
+            continue
+
+        return f"{year:04d}-{month:02d}-{day:02d}"
+
+    return None
+
+
 app = Flask(__name__)
 CORS(app)
 
@@ -28,14 +81,14 @@ def ocr():
         # 画像中央付近の賞味期限部分を切り出す
         width, height = image.size
 
-        #image = image.crop(
-        #    (
-        #        int(width * 0.25),  # 左
-        #        int(height * 0.25),  # 上
-        #        int(width * 0.75),  # 右
-        #        int(height * 0.60),  # 下
-        #    )
-        #)
+        # image = image.crop(
+        #     (
+        #         int(width * 0.25),
+        #         int(height * 0.25),
+        #         int(width * 0.75),
+        #         int(height * 0.60),
+        #     )
+        # )
 
         # 小さい文字を読みやすくするため3倍に拡大
         width, height = image.size
@@ -50,57 +103,109 @@ def ocr():
 
         enhancer = ImageEnhance.Contrast(image)
         image = enhancer.enhance(2.0)
+
+        # 文字をくっきりさせる
+        sharpener = ImageEnhance.Sharpness(image)
+        image = sharpener.enhance(2.0)
+
         # 白黒をはっきりさせる
-        # image = image.point(lambda x: 0 if x < 140 else 255)
+        # image = image.point(lambda x: 0 if x < 110 else 255)
+
+        # 周囲に白い余白を追加
+        image = ImageOps.expand(image, border=20, fill=255)
 
         # 加工後の画像を確認用に保存
         # image.save("ocr_debug.png")
+        
+        # =========================
+        # 複数パターンでOCRを試す
+        # =========================
 
-        # OCR
-        text = pytesseract.image_to_string(image, lang="jpn+eng", config="--psm 11")
+        width, height = image.size
 
-        # 日付用：数字だけを読み取る
-        date_text = pytesseract.image_to_string(
-            image, lang="eng", config="--psm 11 -c tessedit_char_whitelist=0123456789"
-        )
+        image_variants = [
+            ("full", image),
 
-        print("日付OCR結果:")
-        print(date_text)
+            # 少しだけ周囲を除く
+            (
+                "trim-small",
+                image.crop(
+                    (
+                        int(width * 0.05),
+                        int(height * 0.10),
+                        int(width * 0.95),
+                        int(height * 0.90),
+                    )
+                ),
+            ),
 
-        #print("OCR結果:")
-        #print(text)
+            # 周囲の背景をもう少し除く
+            (
+                "trim-medium",
+                image.crop(
+                    (
+                        int(width * 0.08),
+                        int(height * 0.18),
+                        int(width * 0.92),
+                        int(height * 0.82),
+                    )
+                ),
+            ),
+        ]
 
-        # 賞味期限らしい日付を探す
+        psm_modes = [7, 8, 10, 13]
+
+        date_counts = {}
+        ocr_results = []
+
+        for variant_name, variant_image in image_variants:
+
+            # OCRしやすいように白い余白を追加
+            variant_image = ImageOps.expand(
+                variant_image,
+                border=20,
+                fill=255,
+            )
+
+            for psm in psm_modes:
+
+                text = pytesseract.image_to_string(
+                    variant_image,
+                    lang="eng",
+                    config=(
+                        f"--psm {psm} "
+                        "-c tessedit_char_whitelist=0123456789./-"
+                    ),
+                ).strip()
+
+                print(
+                    f"OCR [{variant_name} / psm {psm}]:",
+                    repr(text),
+                )
+
+                if text:
+                    ocr_results.append(text)
+
+                expiry_candidate = parse_expiry_date(text)
+
+                if expiry_candidate:
+                    date_counts[expiry_candidate] = (
+                        date_counts.get(expiry_candidate, 0) + 1
+                    )
+
+
+        # 一番多く認識された日付を採用
         expiry = None
 
-        # まず「年月日」を探す
-        full_date_pattern = (
-            r"(20\d{2})" r"[年./-]" r"(\d{1,2})" r"[月./-]" r"(\d{1,2})" r"日?"
-        )
+        if date_counts:
+            expiry = max(
+                date_counts,
+                key=date_counts.get,
+            )
 
-        match = re.search(full_date_pattern, text)
 
-        if match:
-            year = int(match.group(1))
-            month = int(match.group(2))
-            day = int(match.group(3))
-
-            expiry = f"{year:04d}-{month:02d}-{day:02d}"
-
-        else:
-            # 「2026年11月」のような年月だけの表記を探す
-            year_month_pattern = r"(20\d{2})" r"\s*年\s*" r"(\d{1,2})" r"\s*月"
-
-            match = re.search(year_month_pattern, text)
-
-            if match:
-                year = int(match.group(1))
-                month = int(match.group(2))
-
-                # その月の末日を取得
-                day = calendar.monthrange(year, month)[1]
-
-                expiry = f"{year:04d}-{month:02d}-{day:02d}"
+        print("日付候補:", date_counts)
+        print("採用した賞味期限:", expiry)
 
         return jsonify({"name": "", "expiry": expiry, "text": text})
 

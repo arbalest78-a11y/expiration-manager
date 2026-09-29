@@ -84,6 +84,16 @@
               <canvas id="cameraCanvas" hidden></canvas>
 
               <img id="imagePreview" alt="商品写真プレビュー" />
+              <div id="cropArea" hidden>
+                <p>賞味期限の部分をドラッグして囲んでください。</p>
+
+                <canvas id="cropCanvas"></canvas>
+
+                <button type="button" id="clearCropButton">
+                  選択範囲を解除
+                </button>
+              </div>
+              
               <button type="button" id="removeImageButton">写真を削除</button>
 
               <button type="button" id="ocrButton" disabled>
@@ -157,6 +167,7 @@
         <div id="itemList"></div>
       </section>
     </main>
+    <script src="https://unpkg.com/@zxing/browser@0.2.1"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script type="module" src="./js/script.js"></script>
   </body>
