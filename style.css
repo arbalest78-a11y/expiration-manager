@@ -612,3 +612,22 @@ textarea {
   max-width: 100%;
   box-sizing: border-box;
 }
+
+/* カメラ表示 */
+#cameraArea {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#cameraArea[hidden] {
+  display: none;
+}
+
+#cameraVideo {
+  display: block;
+  width: 100%;
+  height: 300px;
+  object-fit: cover;
+  background: #000;
+}
