@@ -603,6 +603,10 @@ canvas {
   width: 100%;
   max-width: 700px;
   height: auto;
+
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 button,
@@ -631,3 +635,4 @@ textarea {
   object-fit: cover;
   background: #000;
 }
+
