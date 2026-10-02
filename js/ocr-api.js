@@ -9,7 +9,7 @@ export async function requestOcr(file) {
   formData.append("image", file);
 
   const response = await fetch(
-    "https://a9f95210c3e1a8.lhr.life/ocr",
+    "https://10cff1e814395d.lhr.life/ocr",
     {
       method: "POST",
       body: formData
