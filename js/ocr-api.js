@@ -3,24 +3,22 @@
 
 // OCRサーバーへ画像を送る処理
 
-export async function requestOcr(file) {
-  const formData = new FormData();
+export async function requestOcr (file) {
+  const formData = new FormData()
 
-  formData.append("image", file);
+  formData.append('image', file)
 
   const response = await fetch(
-    "https://f2e69889b009ac.lhr.life/ocr",
-    {
-      method: "POST",
-      body: formData
-    }
-  );
+    'https://expiration-manager.onrender.com/ocr', {
+    method: 'POST',
+    body: formData
+  })
 
   if (!response.ok) {
-    throw new Error("OCRサーバーとの通信に失敗しました。");
+    throw new Error('OCRサーバーとの通信に失敗しました。')
   }
 
-  const result = await response.json();
+  const result = await response.json()
 
-  return result;
+  return result
 }
