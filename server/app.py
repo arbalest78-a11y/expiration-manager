@@ -4,6 +4,7 @@ from PIL import Image, ImageOps, ImageEnhance
 import pytesseract
 import re
 import calendar
+import os
 
 
 def parse_expiry_date(text):
@@ -62,7 +63,11 @@ app = Flask(__name__)
 CORS(app)
 
 # Tesseract本体の場所を指定
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+if os.name == "nt":
+    pytesseract.pytesseract.tesseract_cmd = (
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    )
 
 
 @app.route("/ocr", methods=["POST"])
