@@ -61,6 +61,10 @@ const clearCropButton = document.getElementById('clearCropButton')
 
 const cropContext = cropCanvas.getContext('2d')
 
+const zoomControl = document.getElementById('zoomControl')
+const zoomSlider = document.getElementById('zoomSlider')
+const zoomValue = document.getElementById('zoomValue')
+
 // =========================
 // データ
 // =========================
@@ -470,9 +474,40 @@ startCameraButton.addEventListener('click', async function () {
 
       // ズーム対応確認
       if (capabilities.zoom) {
-        zoomModeText = capabilities.zoom.min + ' ～ ' + capabilities.zoom.max
+        const zoom = capabilities.zoom
+        const settings = videoTrack.getSettings()
 
-        console.log('ズーム capabilities:', capabilities.zoom)
+        zoomModeText = zoom.min + ' ～ ' + zoom.max
+
+        zoomSlider.min = zoom.min
+        zoomSlider.max = zoom.max
+        zoomSlider.step = zoom.step || 0.1
+        zoomSlider.value = settings.zoom || zoom.min
+
+        zoomValue.textContent = zoomSlider.value
+        zoomControl.hidden = false
+
+        zoomSlider.oninput = async function () {
+          const value = Number(zoomSlider.value)
+
+          zoomValue.textContent = value
+
+          try {
+            await videoTrack.applyConstraints({
+              advanced: [
+                {
+                  zoom: value
+                }
+              ]
+            })
+          } catch (error) {
+            console.error('ズーム変更エラー:', error)
+          }
+        }
+
+        console.log('ズーム capabilities:', zoom)
+      } else {
+        zoomControl.hidden = true
       }
     }
 
