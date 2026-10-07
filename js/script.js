@@ -409,7 +409,7 @@ async function startJanScan () {
 
         console.log('JANコードを読み取りました:', detectedJan)
 
-        ocrStatus.textContent = 'JANコードを読み取りました：' + detectedJan
+        // ocrStatus.textContent = 'JANコードを読み取りました：' + detectedJan
       }
     )
   } catch (error) {
@@ -438,9 +438,13 @@ startCameraButton.addEventListener('click', async function () {
     // 使用中のカメラトラックを取得
     const videoTrack = cameraStream.getVideoTracks()[0]
 
+    let focusModeText = '取得できません'
+
     // 連続オートフォーカスに対応している場合は有効化
     if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
       const capabilities = videoTrack.getCapabilities()
+
+      console.log('カメラ capabilities:', capabilities)
 
       if (
         Array.isArray(capabilities.focusMode) &&
@@ -454,25 +458,20 @@ startCameraButton.addEventListener('click', async function () {
           ]
         })
 
-        console.log('連続オートフォーカスを有効にしました')
-
         const settings = videoTrack.getSettings()
 
-        console.log('カメラ capabilities:', capabilities)
         console.log('カメラ settings:', settings)
 
-        ocrStatus.textContent =
-          'フォーカス設定: ' + (settings.focusMode || '取得できません')
-
+        focusModeText = settings.focusMode || '取得できません'
       } else {
-        console.log('この端末では連続オートフォーカスを指定できません')
+        focusModeText = 'continuous 非対応'
       }
     }
 
     cameraVideo.srcObject = cameraStream
     cameraArea.hidden = false
 
-    ocrStatus.textContent = 'JANコードをカメラに映してください。'
+    ocrStatus.textContent = 'フォーカス設定: ' + focusModeText
 
     await startJanScan()
   } catch (error) {
