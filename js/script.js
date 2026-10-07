@@ -455,6 +455,15 @@ startCameraButton.addEventListener('click', async function () {
         })
 
         console.log('連続オートフォーカスを有効にしました')
+
+        const settings = videoTrack.getSettings()
+
+        console.log('カメラ capabilities:', capabilities)
+        console.log('カメラ settings:', settings)
+
+        ocrStatus.textContent =
+          'フォーカス設定: ' + (settings.focusMode || '取得できません')
+
       } else {
         console.log('この端末では連続オートフォーカスを指定できません')
       }
