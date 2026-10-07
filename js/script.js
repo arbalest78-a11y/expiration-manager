@@ -439,13 +439,14 @@ startCameraButton.addEventListener('click', async function () {
     const videoTrack = cameraStream.getVideoTracks()[0]
 
     let focusModeText = '取得できません'
+    let zoomModeText = '非対応'
 
-    // 連続オートフォーカスに対応している場合は有効化
     if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
       const capabilities = videoTrack.getCapabilities()
 
       console.log('カメラ capabilities:', capabilities)
 
+      // 連続オートフォーカス確認
       if (
         Array.isArray(capabilities.focusMode) &&
         capabilities.focusMode.includes('continuous')
@@ -466,12 +467,20 @@ startCameraButton.addEventListener('click', async function () {
       } else {
         focusModeText = 'continuous 非対応'
       }
+
+      // ズーム対応確認
+      if (capabilities.zoom) {
+        zoomModeText = capabilities.zoom.min + ' ～ ' + capabilities.zoom.max
+
+        console.log('ズーム capabilities:', capabilities.zoom)
+      }
     }
 
     cameraVideo.srcObject = cameraStream
     cameraArea.hidden = false
 
-    ocrStatus.textContent = 'フォーカス設定: ' + focusModeText
+    ocrStatus.textContent =
+      'フォーカス: ' + focusModeText + ' / ズーム: ' + zoomModeText
 
     await startJanScan()
   } catch (error) {
