@@ -53,13 +53,7 @@ import {
 
 import { readExpiryDate } from './ocr.js'
 
-const cropArea = document.getElementById('cropArea')
-
-const cropCanvas = document.getElementById('cropCanvas')
-
-const clearCropButton = document.getElementById('clearCropButton')
-
-const cropContext = cropCanvas.getContext('2d')
+const expiryGuide = document.getElementById('expiryGuide')
 
 const zoomControl = document.getElementById('zoomControl')
 const zoomSlider = document.getElementById('zoomSlider')
@@ -77,19 +71,11 @@ let expiryFilter = 'all'
 
 let cameraStream = null
 let ocrFile = null
-let cropImage = null
 
 let barcodeControls = null
 let detectedJan = ''
 
 const janCodeReader = new ZXingBrowser.BrowserMultiFormatOneDReader()
-
-let cropSelection = null
-
-let isSelectingCrop = false
-
-let cropStartX = 0
-let cropStartY = 0
 
 // =========================
 // 初期表示
@@ -149,10 +135,12 @@ itemImage.addEventListener('change', function () {
   const file = itemImage.files[0]
 
   if (!file) {
+    ocrFile = null
     ocrButton.disabled = true
     return
   }
 
+  // 端末の写真を選んだ場合は、その画像全体をOCRに送る
   ocrFile = file
 
   const reader = new FileReader()
@@ -161,7 +149,6 @@ itemImage.addEventListener('change', function () {
     selectedImage = reader.result
 
     showImagePreview(selectedImage)
-    showCropSelector(selectedImage)
 
     // 写真を選択したらOCRボタンを使えるようにする
     ocrButton.disabled = false
@@ -172,212 +159,66 @@ itemImage.addEventListener('change', function () {
 })
 
 // =========================
-// OCR範囲選択
+// カメラの赤いガイド枠をOCR用の画像範囲に変換
 // =========================
 
-// 画像を範囲選択Canvasに表示
-function showCropSelector (dataUrl) {
-  cropImage = new Image()
+// カメラ映像は object-fit: cover で一部が画面からはみ出す。
+// ガイド枠の画面上の位置を、撮影した元画像のピクセル座標に変換する。
+function getGuideCropCoordinates (sourceWidth, sourceHeight, videoRect, guideRect) {
+  if (!sourceWidth || !sourceHeight || !videoRect.width || !videoRect.height) {
+    throw new Error('カメラ映像のサイズを取得できません。')
+  }
 
-  cropImage.addEventListener('load', function () {
-    const maxWidth = 700
+  const scale = Math.max(
+    videoRect.width / sourceWidth,
+    videoRect.height / sourceHeight
+  )
+  const hiddenX = (sourceWidth * scale - videoRect.width) / 2
+  const hiddenY = (sourceHeight * scale - videoRect.height) / 2
 
-    let displayWidth = cropImage.naturalWidth
-    let displayHeight = cropImage.naturalHeight
+  const x1 = Math.max(0, (guideRect.left - videoRect.left + hiddenX) / scale)
+  const y1 = Math.max(0, (guideRect.top - videoRect.top + hiddenY) / scale)
+  const x2 = Math.min(sourceWidth, (guideRect.right - videoRect.left + hiddenX) / scale)
+  const y2 = Math.min(sourceHeight, (guideRect.bottom - videoRect.top + hiddenY) / scale)
 
-    if (displayWidth > maxWidth) {
-      const ratio = maxWidth / displayWidth
+  if (x2 <= x1 || y2 <= y1) {
+    throw new Error('ガイド枠の切り抜き範囲を計算できません。')
+  }
 
-      displayWidth = maxWidth
-
-      displayHeight = Math.round(displayHeight * ratio)
-    }
-
-    cropCanvas.width = displayWidth
-    cropCanvas.height = displayHeight
-
-    cropSelection = null
-
-    drawCropCanvas()
-
-    cropArea.hidden = false
-  })
-
-  cropImage.src = dataUrl
+  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
 }
 
-// Canvasを描画
-function drawCropCanvas () {
-  if (!cropImage) {
-    return
-  }
-
-  cropContext.clearRect(0, 0, cropCanvas.width, cropCanvas.height)
-
-  cropContext.drawImage(cropImage, 0, 0, cropCanvas.width, cropCanvas.height)
-
-  if (cropSelection) {
-    cropContext.strokeStyle = 'red'
-    cropContext.lineWidth = 3
-
-    cropContext.strokeRect(
-      cropSelection.x,
-      cropSelection.y,
-      cropSelection.width,
-      cropSelection.height
-    )
-  }
-}
-
-// マウス位置をCanvas座標に変換
-function getCropPosition (event) {
-  const rect = cropCanvas.getBoundingClientRect()
-
-  const scaleX = cropCanvas.width / rect.width
-
-  const scaleY = cropCanvas.height / rect.height
-
-  return {
-    x: (event.clientX - rect.left) * scaleX,
-
-    y: (event.clientY - rect.top) * scaleY
-  }
-}
-
-// 選択開始
-cropCanvas.addEventListener('pointerdown', function (event) {
-  const position = getCropPosition(event)
-
-  cropStartX = position.x
-  cropStartY = position.y
-
-  isSelectingCrop = true
-
-  cropCanvas.setPointerCapture(event.pointerId)
-})
-
-// 選択中
-cropCanvas.addEventListener('pointermove', function (event) {
-  if (!isSelectingCrop) {
-    return
-  }
-
-  const position = getCropPosition(event)
-
-  cropSelection = {
-    x: Math.min(cropStartX, position.x),
-
-    y: Math.min(cropStartY, position.y),
-
-    width: Math.abs(position.x - cropStartX),
-
-    height: Math.abs(position.y - cropStartY)
-  }
-
-  drawCropCanvas()
-})
-
-// 選択終了
-cropCanvas.addEventListener('pointerup', function () {
-  isSelectingCrop = false
-})
-
-// 選択を解除
-clearCropButton.addEventListener('click', function () {
-  cropSelection = null
-
-  drawCropCanvas()
-})
-
-function createCroppedOcrFile () {
+// 撮影画像のうち赤いガイド枠に重なっていた範囲だけをJPEGにする
+function createGuideOcrFile (sourceCanvas, videoRect, guideRect) {
   return new Promise(function (resolve, reject) {
-    // 範囲を選択していない場合は元画像を使う
-    if (
-      !cropImage ||
-      !cropSelection ||
-      cropSelection.width < 5 ||
-      cropSelection.height < 5
-    ) {
-      resolve(ocrFile)
-      return
-    }
+    try {
+      const area = getGuideCropCoordinates(
+        sourceCanvas.width,
+        sourceCanvas.height,
+        videoRect,
+        guideRect
+      )
+      const outputCanvas = document.createElement('canvas')
+      outputCanvas.width = Math.max(1, Math.round(area.width))
+      outputCanvas.height = Math.max(1, Math.round(area.height))
+      const context = outputCanvas.getContext('2d')
 
-    // 表示画像と元画像のサイズ差を計算
-    const scaleX = cropImage.naturalWidth / cropCanvas.width
+      context.drawImage(
+        sourceCanvas,
+        area.x, area.y, area.width, area.height,
+        0, 0, outputCanvas.width, outputCanvas.height
+      )
 
-    const scaleY = cropImage.naturalHeight / cropCanvas.height
-
-    const sourceX = cropSelection.x * scaleX
-
-    const sourceY = cropSelection.y * scaleY
-
-    const sourceWidth = cropSelection.width * scaleX
-
-    const sourceHeight = cropSelection.height * scaleY
-
-    // 選択範囲の周囲に自動で余白を追加
-    const paddingX = sourceWidth * 0.1
-    const paddingY = sourceHeight * 0.25
-
-    // 元画像の外にはみ出さないように調整
-    const paddedX = Math.max(0, sourceX - paddingX)
-
-    const paddedY = Math.max(0, sourceY - paddingY)
-
-    const paddedRight = Math.min(
-      cropImage.naturalWidth,
-      sourceX + sourceWidth + paddingX
-    )
-
-    const paddedBottom = Math.min(
-      cropImage.naturalHeight,
-      sourceY + sourceHeight + paddingY
-    )
-
-    const paddedWidth = paddedRight - paddedX
-
-    const paddedHeight = paddedBottom - paddedY
-
-    // 切り抜き画像用Canvas
-    const outputCanvas = document.createElement('canvas')
-
-    outputCanvas.width = Math.round(paddedWidth)
-
-    outputCanvas.height = Math.round(paddedHeight)
-
-    const outputContext = outputCanvas.getContext('2d')
-
-    outputContext.drawImage(
-      cropImage,
-
-      paddedX,
-      paddedY,
-      paddedWidth,
-      paddedHeight,
-
-      0,
-      0,
-      outputCanvas.width,
-      outputCanvas.height
-    )
-
-    outputCanvas.toBlob(
-      function (blob) {
+      outputCanvas.toBlob(function (blob) {
         if (!blob) {
-          reject(new Error('画像の切り抜きに失敗しました。'))
+          reject(new Error('OCR用画像の切り抜きに失敗しました。'))
           return
         }
-
-        const file = new File([blob], 'expiry-crop.jpg', {
-          type: 'image/jpeg'
-        })
-
-        resolve(file)
-      },
-
-      'image/jpeg',
-      0.95
-    )
+        resolve(new File([blob], 'expiry-guide.jpg', { type: 'image/jpeg' }))
+      }, 'image/jpeg', 0.95)
+    } catch (error) {
+      reject(error)
+    }
   })
 }
 
@@ -525,41 +366,43 @@ startCameraButton.addEventListener('click', async function () {
   }
 })
 
-// 撮影
-captureButton.addEventListener('click', function () {
-  const context = cameraCanvas.getContext('2d')
+// 撮影：商品写真は全体を保存し、OCRにはガイド枠内だけを送る
+captureButton.addEventListener('click', async function () {
+  if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
+    ocrStatus.textContent = 'カメラの準備ができていません。少し待ってから撮影してください。'
+    return
+  }
 
-  cameraCanvas.width = cameraVideo.videoWidth
+  captureButton.disabled = true
+  ocrButton.disabled = true
+  ocrFile = null
+  ocrStatus.textContent = '撮影画像を準備しています...'
 
-  cameraCanvas.height = cameraVideo.videoHeight
+  try {
+    // カメラを閉じる前に、画面上の映像とガイド枠の位置を記録する
+    const videoRect = cameraVideo.getBoundingClientRect()
+    const guideRect = expiryGuide.getBoundingClientRect()
 
-  context.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height)
+    cameraCanvas.width = cameraVideo.videoWidth
+    cameraCanvas.height = cameraVideo.videoHeight
+    const context = cameraCanvas.getContext('2d')
+    context.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height)
 
-  selectedImage = cameraCanvas.toDataURL('image/jpeg')
+    // 商品用の写真は従来どおり全体をプレビュー・保存する
+    selectedImage = cameraCanvas.toDataURL('image/jpeg', 0.9)
+    showImagePreview(selectedImage)
 
-  showImagePreview(selectedImage)
-
-  showCropSelector(selectedImage)
-
-  cameraCanvas.toBlob(
-    function (blob) {
-      if (!blob) {
-        return
-      }
-
-      ocrFile = new File([blob], 'camera.jpg', {
-        type: 'image/jpeg'
-      })
-
-      ocrButton.disabled = false
-
-      ocrStatus.textContent = '撮影しました。画像から読み取れます。'
-    },
-    'image/jpeg',
-    0.9
-  )
-
-  stopCamera()
+    // OCRに送るのは赤いガイド枠内を自動で切り抜いた画像
+    ocrFile = await createGuideOcrFile(cameraCanvas, videoRect, guideRect)
+    ocrButton.disabled = false
+    ocrStatus.textContent = '撮影しました。赤い枠内の賞味期限を読み取れます。'
+  } catch (error) {
+    console.error('ガイド枠の切り抜きエラー:', error)
+    ocrStatus.textContent = '撮影画像の準備に失敗しました。もう一度撮影してください。'
+  } finally {
+    captureButton.disabled = false
+    stopCamera()
+  }
 })
 
 // カメラを閉じる
@@ -592,7 +435,7 @@ ocrButton.addEventListener('click', async function (event) {
 
   console.log('OCRボタンが押されました')
 
-  const file = await createCroppedOcrFile()
+  const file = ocrFile
 
   if (!file) {
     ocrStatus.textContent = '画像を選択してください。'
@@ -628,6 +471,8 @@ ocrButton.addEventListener('click', async function (event) {
 // 選択・登録済みの写真を削除
 removeImageButton.addEventListener('click', function () {
   selectedImage = ''
+  ocrFile = null
+  itemImage.value = ''
 
   clearImagePreview()
 
@@ -639,6 +484,7 @@ removeImageButton.addEventListener('click', function () {
 addButton.addEventListener('click', function () {
   editingId = null
   selectedImage = ''
+  ocrFile = null
 
   ocrButton.disabled = true
   ocrStatus.textContent = ''
@@ -650,6 +496,7 @@ addButton.addEventListener('click', function () {
 cancelButton.addEventListener('click', function () {
   editingId = null
   selectedImage = ''
+  ocrFile = null
 
   ocrButton.disabled = true
   ocrStatus.textContent = ''
@@ -696,6 +543,7 @@ itemForm.addEventListener('submit', function (event) {
 
   editingId = null
   selectedImage = ''
+  ocrFile = null
 
   closeForm()
 })
@@ -791,6 +639,7 @@ importFile.addEventListener('change', async function () {
 function openEditForm (item) {
   editingId = item.id
   selectedImage = item.image || ''
+  ocrFile = null
 
   openEditFormUI(item)
 }

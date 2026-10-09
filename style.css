@@ -592,22 +592,6 @@ canvas {
   height: auto;
 }
 
-#cropArea {
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-#cropCanvas {
-  display: block;
-  width: 100%;
-  max-width: 700px;
-  height: auto;
-
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
 
 button,
 input,

@@ -77,7 +77,7 @@
                   <div id="expiryGuide" aria-hidden="true"></div>
                 </div>
                 <p class="camera-guide-instruction">
-                  赤い枠の中に賞味期限を合わせて撮影してください。
+                  赤い枠に賞味期限を合わせて撮影してください。枠内を自動で読み取り用に切り抜きます。
                 </p>
                 <div id="zoomControl" hidden>
                   <label for="zoomSlider">
@@ -103,15 +103,6 @@
               <canvas id="cameraCanvas" hidden></canvas>
 
               <img id="imagePreview" alt="商品写真プレビュー" />
-              <div id="cropArea" hidden>
-                <p>賞味期限の部分をドラッグして囲んでください。</p>
-
-                <canvas id="cropCanvas"></canvas>
-
-                <button type="button" id="clearCropButton">
-                  選択範囲を解除
-                </button>
-              </div>
 
               <button type="button" id="removeImageButton">写真を削除</button>
 
