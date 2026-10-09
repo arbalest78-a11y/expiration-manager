@@ -72,7 +72,13 @@
               <button type="button" id="startCameraButton">カメラを起動</button>
 
               <div id="cameraArea" hidden>
-                <video id="cameraVideo" autoplay playsinline></video>
+                <div class="camera-preview">
+                  <video id="cameraVideo" autoplay playsinline></video>
+                  <div id="expiryGuide" aria-hidden="true"></div>
+                </div>
+                <p class="camera-guide-instruction">
+                  赤い枠の中に賞味期限を合わせて撮影してください。
+                </p>
                 <div id="zoomControl" hidden>
                   <label for="zoomSlider">
                     ズーム：<span id="zoomValue">1</span>倍
