@@ -54,6 +54,8 @@ import {
 import { readExpiryDate } from './ocr.js'
 
 const expiryGuide = document.getElementById('expiryGuide')
+const focusButton = document.getElementById('focusButton')
+const focusStatus = document.getElementById('focusStatus')
 
 const zoomControl = document.getElementById('zoomControl')
 const zoomSlider = document.getElementById('zoomSlider')
@@ -268,8 +270,56 @@ async function startJanScan () {
 // カメラ
 // =========================
 
+// 対応端末でのみ、ボタンから単発オートフォーカスを要求する。
+// 非対応のブラウザでは操作できないことを明示する。
+focusButton.addEventListener('click', async function () {
+  const track = cameraStream?.getVideoTracks()[0]
+  if (!track || track.readyState !== 'live') {
+    focusStatus.textContent = 'カメラが起動していません。'
+    return
+  }
+
+  const capabilities = typeof track.getCapabilities === 'function'
+    ? track.getCapabilities()
+    : {}
+  const modes = Array.isArray(capabilities.focusMode) ? capabilities.focusMode : []
+  if (!modes.includes('single-shot')) {
+    focusButton.disabled = true
+    focusStatus.textContent = 'この端末のブラウザは手動ピント合わせに対応していません。'
+    return
+  }
+
+  focusButton.disabled = true
+  focusStatus.textContent = 'ピント合わせを要求しています...'
+  try {
+    // 毎回単発AFを要求するため、前回もsingle-shotだった場合は
+    // 対応しているときだけcontinuousへ戻してから切り替える。
+    if (
+      track.getSettings().focusMode === 'single-shot' &&
+      modes.includes('continuous')
+    ) {
+      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+    }
+
+    await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] })
+    const appliedMode = track.getSettings().focusMode
+    if (appliedMode && appliedMode !== 'single-shot') {
+      focusStatus.textContent = 'ピント設定が適用されたことを確認できませんでした。'
+    } else {
+      focusStatus.textContent = 'ピント合わせを要求しました。文字が鮮明になったか確認してください。'
+    }
+  } catch (error) {
+    console.error('手動フォーカスエラー:', error)
+    focusStatus.textContent = 'ピント合わせに失敗しました。少し距離を離して試してください。'
+  } finally {
+    if (track.readyState === 'live') focusButton.disabled = false
+  }
+})
+
 // カメラを起動
 startCameraButton.addEventListener('click', async function () {
+  focusButton.disabled = true
+  focusStatus.textContent = ''
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -290,6 +340,15 @@ startCameraButton.addEventListener('click', async function () {
       const capabilities = videoTrack.getCapabilities()
 
       console.log('カメラ capabilities:', capabilities)
+
+      const focusModes = Array.isArray(capabilities.focusMode)
+        ? capabilities.focusMode : []
+      focusButton.disabled = !focusModes.includes('single-shot')
+      if (focusButton.disabled) {
+        focusStatus.textContent = '手動ピント合わせ非対応（自動フォーカスは利用できる場合があります）。'
+      } else {
+        focusStatus.textContent = '文字がぼやけていたら「ピントを合わせる」を押してください。'
+      }
 
       // 連続オートフォーカス確認
       if (
@@ -352,6 +411,9 @@ startCameraButton.addEventListener('click', async function () {
       }
     }
 
+    if (focusStatus.textContent === '') {
+      focusStatus.textContent = '手動ピント合わせの対応状況を確認できません。'
+    }
     cameraVideo.srcObject = cameraStream
     cameraArea.hidden = false
 
@@ -412,6 +474,8 @@ stopCameraButton.addEventListener('click', function () {
 
 // カメラ停止
 function stopCamera () {
+  focusButton.disabled = true
+  focusStatus.textContent = ''
   if (barcodeControls) {
     barcodeControls.stop()
     barcodeControls = null

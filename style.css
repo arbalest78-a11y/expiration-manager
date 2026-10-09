@@ -659,3 +659,30 @@ textarea {
   line-height: 1.5;
   text-align: center;
 }
+
+
+/* 手動ピント合わせ：対応するスマホのみ有効化 */
+#focusButton {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  font-size: 16px;
+  border: 1px solid #888;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+#focusButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.camera-focus-status {
+  min-height: 1.5em;
+  margin: 6px 0 10px;
+  color: #444;
+  font-size: 13px;
+  line-height: 1.5;
+}
