@@ -5,6 +5,7 @@ import pytesseract
 import re
 import calendar
 import os
+import time
 
 
 def parse_expiry_date(text):
@@ -16,7 +17,6 @@ def parse_expiry_date(text):
             r"(20\d{2})[./-](\d{1,2})[./-](\d{1,2})",
             False,
         ),
-
         # 26.09.20
         # 前後にOCRの余計な数字があっても、
         # 途中の「26.09.20」を拾えるようにする
@@ -24,7 +24,6 @@ def parse_expiry_date(text):
             r"(\d{2})[./-](\d{1,2})[./-](\d{1,2})",
             True,
         ),
-
         # 2609.20
         (
             r"(\d{2})(\d{2})[./-](\d{1,2})",
@@ -77,6 +76,9 @@ def ocr():
 
     image_file = request.files["image"]
 
+    # OCR処理全体の開始時間
+    start_time = time.perf_counter()
+
     print("受信した画像:", image_file.filename)
 
     try:
@@ -121,7 +123,7 @@ def ocr():
 
         # 加工後の画像を確認用に保存
         # image.save("ocr_debug.png")
-        
+
         # =========================
         # 複数パターンでOCRを試す
         # =========================
@@ -130,7 +132,6 @@ def ocr():
 
         image_variants = [
             ("full", image),
-
             # 少しだけ周囲を除く
             (
                 "trim-small",
@@ -143,7 +144,6 @@ def ocr():
                     )
                 ),
             ),
-
             # 周囲の背景をもう少し除く
             (
                 "trim-medium",
@@ -174,14 +174,23 @@ def ocr():
 
             for psm in psm_modes:
 
+                # 1回分のOCR開始時間
+                ocr_start = time.perf_counter()
+
                 text = pytesseract.image_to_string(
                     variant_image,
                     lang="eng",
-                    config=(
-                        f"--psm {psm} "
-                        "-c tessedit_char_whitelist=0123456789./-"
-                    ),
+                    config=(f"--psm {psm} " "-c tessedit_char_whitelist=0123456789./-"),
                 ).strip()
+
+                # OCR処理時間を計算
+                ocr_elapsed = time.perf_counter() - ocr_start
+
+                print(
+                    f"OCR処理時間 [{variant_name} / psm {psm}]: "
+                    f"{ocr_elapsed:.2f}秒",
+                    flush=True,
+                )
 
                 print(
                     f"OCR [{variant_name} / psm {psm}]:",
@@ -198,7 +207,6 @@ def ocr():
                         date_counts.get(expiry_candidate, 0) + 1
                     )
 
-
         # 一番多く認識された日付を採用
         expiry = None
 
@@ -208,9 +216,13 @@ def ocr():
                 key=date_counts.get,
             )
 
-
         print("日付候補:", date_counts)
         print("採用した賞味期限:", expiry)
+
+        # OCR全体の処理時間
+        total_elapsed = time.perf_counter() - start_time
+
+        print(f"OCR全体の処理時間: {total_elapsed:.2f}秒", flush=True)
 
         return jsonify({"name": "", "expiry": expiry, "text": text})
 
