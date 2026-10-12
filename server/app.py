@@ -131,20 +131,6 @@ def ocr():
         width, height = image.size
 
         image_variants = [
-            ("full", image),
-            # 少しだけ周囲を除く
-            (
-                "trim-small",
-                image.crop(
-                    (
-                        int(width * 0.05),
-                        int(height * 0.10),
-                        int(width * 0.95),
-                        int(height * 0.90),
-                    )
-                ),
-            ),
-            # 周囲の背景をもう少し除く
             (
                 "trim-medium",
                 image.crop(
