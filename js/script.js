@@ -166,7 +166,12 @@ itemImage.addEventListener('change', function () {
 
 // カメラ映像は object-fit: cover で一部が画面からはみ出す。
 // ガイド枠の画面上の位置を、撮影した元画像のピクセル座標に変換する。
-function getGuideCropCoordinates (sourceWidth, sourceHeight, videoRect, guideRect) {
+function getGuideCropCoordinates (
+  sourceWidth,
+  sourceHeight,
+  videoRect,
+  guideRect
+) {
   if (!sourceWidth || !sourceHeight || !videoRect.width || !videoRect.height) {
     throw new Error('カメラ映像のサイズを取得できません。')
   }
@@ -180,8 +185,14 @@ function getGuideCropCoordinates (sourceWidth, sourceHeight, videoRect, guideRec
 
   const x1 = Math.max(0, (guideRect.left - videoRect.left + hiddenX) / scale)
   const y1 = Math.max(0, (guideRect.top - videoRect.top + hiddenY) / scale)
-  const x2 = Math.min(sourceWidth, (guideRect.right - videoRect.left + hiddenX) / scale)
-  const y2 = Math.min(sourceHeight, (guideRect.bottom - videoRect.top + hiddenY) / scale)
+  const x2 = Math.min(
+    sourceWidth,
+    (guideRect.right - videoRect.left + hiddenX) / scale
+  )
+  const y2 = Math.min(
+    sourceHeight,
+    (guideRect.bottom - videoRect.top + hiddenY) / scale
+  )
 
   if (x2 <= x1 || y2 <= y1) {
     throw new Error('ガイド枠の切り抜き範囲を計算できません。')
@@ -207,17 +218,27 @@ function createGuideOcrFile (sourceCanvas, videoRect, guideRect) {
 
       context.drawImage(
         sourceCanvas,
-        area.x, area.y, area.width, area.height,
-        0, 0, outputCanvas.width, outputCanvas.height
+        area.x,
+        area.y,
+        area.width,
+        area.height,
+        0,
+        0,
+        outputCanvas.width,
+        outputCanvas.height
       )
 
-      outputCanvas.toBlob(function (blob) {
-        if (!blob) {
-          reject(new Error('OCR用画像の切り抜きに失敗しました。'))
-          return
-        }
-        resolve(new File([blob], 'expiry-guide.jpg', { type: 'image/jpeg' }))
-      }, 'image/jpeg', 0.95)
+      outputCanvas.toBlob(
+        function (blob) {
+          if (!blob) {
+            reject(new Error('OCR用画像の切り抜きに失敗しました。'))
+            return
+          }
+          resolve(new File([blob], 'expiry-guide.jpg', { type: 'image/jpeg' }))
+        },
+        'image/jpeg',
+        0.95
+      )
     } catch (error) {
       reject(error)
     }
@@ -279,13 +300,15 @@ focusButton.addEventListener('click', async function () {
     return
   }
 
-  const capabilities = typeof track.getCapabilities === 'function'
-    ? track.getCapabilities()
-    : {}
-  const modes = Array.isArray(capabilities.focusMode) ? capabilities.focusMode : []
+  const capabilities =
+    typeof track.getCapabilities === 'function' ? track.getCapabilities() : {}
+  const modes = Array.isArray(capabilities.focusMode)
+    ? capabilities.focusMode
+    : []
   if (!modes.includes('single-shot')) {
     focusButton.disabled = true
-    focusStatus.textContent = 'この端末のブラウザは手動ピント合わせに対応していません。'
+    focusStatus.textContent =
+      'この端末のブラウザは手動ピント合わせに対応していません。'
     return
   }
 
@@ -304,13 +327,16 @@ focusButton.addEventListener('click', async function () {
     await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] })
     const appliedMode = track.getSettings().focusMode
     if (appliedMode && appliedMode !== 'single-shot') {
-      focusStatus.textContent = 'ピント設定が適用されたことを確認できませんでした。'
+      focusStatus.textContent =
+        'ピント設定が適用されたことを確認できませんでした。'
     } else {
-      focusStatus.textContent = 'ピント合わせを要求しました。文字が鮮明になったか確認してください。'
+      focusStatus.textContent =
+        'ピント合わせを要求しました。文字が鮮明になったか確認してください。'
     }
   } catch (error) {
     console.error('手動フォーカスエラー:', error)
-    focusStatus.textContent = 'ピント合わせに失敗しました。少し距離を離して試してください。'
+    focusStatus.textContent =
+      'ピント合わせに失敗しました。少し距離を離して試してください。'
   } finally {
     if (track.readyState === 'live') focusButton.disabled = false
   }
@@ -342,12 +368,15 @@ startCameraButton.addEventListener('click', async function () {
       console.log('カメラ capabilities:', capabilities)
 
       const focusModes = Array.isArray(capabilities.focusMode)
-        ? capabilities.focusMode : []
+        ? capabilities.focusMode
+        : []
       focusButton.disabled = !focusModes.includes('single-shot')
       if (focusButton.disabled) {
-        focusStatus.textContent = '手動ピント合わせ非対応（自動フォーカスは利用できる場合があります）。'
+        focusStatus.textContent =
+          '手動ピント合わせ非対応（自動フォーカスは利用できる場合があります）。'
       } else {
-        focusStatus.textContent = '文字がぼやけていたら「ピントを合わせる」を押してください。'
+        focusStatus.textContent =
+          '文字がぼやけていたら「ピントを合わせる」を押してください。'
       }
 
       // 連続オートフォーカス確認
@@ -431,7 +460,8 @@ startCameraButton.addEventListener('click', async function () {
 // 撮影：商品写真は全体を保存し、OCRにはガイド枠内だけを送る
 captureButton.addEventListener('click', async function () {
   if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
-    ocrStatus.textContent = 'カメラの準備ができていません。少し待ってから撮影してください。'
+    ocrStatus.textContent =
+      'カメラの準備ができていません。少し待ってから撮影してください。'
     return
   }
 
@@ -448,7 +478,13 @@ captureButton.addEventListener('click', async function () {
     cameraCanvas.width = cameraVideo.videoWidth
     cameraCanvas.height = cameraVideo.videoHeight
     const context = cameraCanvas.getContext('2d')
-    context.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height)
+    context.drawImage(
+      cameraVideo,
+      0,
+      0,
+      cameraCanvas.width,
+      cameraCanvas.height
+    )
 
     // 商品用の写真は従来どおり全体をプレビュー・保存する
     selectedImage = cameraCanvas.toDataURL('image/jpeg', 0.9)
@@ -460,7 +496,8 @@ captureButton.addEventListener('click', async function () {
     ocrStatus.textContent = '撮影しました。赤い枠内の賞味期限を読み取れます。'
   } catch (error) {
     console.error('ガイド枠の切り抜きエラー:', error)
-    ocrStatus.textContent = '撮影画像の準備に失敗しました。もう一度撮影してください。'
+    ocrStatus.textContent =
+      '撮影画像の準備に失敗しました。もう一度撮影してください。'
   } finally {
     captureButton.disabled = false
     stopCamera()
@@ -520,9 +557,13 @@ ocrButton.addEventListener('click', async function (event) {
 
     if (result.expiry) {
       expiryDate.value = result.expiry
+      ocrStatus.textContent = '賞味期限を読み取りました。'
+    } else if (result.expiry_month) {
+      ocrStatus.textContent = `賞味期限の候補：${result.expiry_month}（年月のみ・要確認）`
+    } else {
+      ocrStatus.textContent = '賞味期限を認識できませんでした。'
     }
 
-    ocrStatus.textContent = '画像の読み取りが完了しました。'
   } catch (error) {
     console.error(error)
 
