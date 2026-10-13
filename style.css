@@ -686,3 +686,21 @@ textarea {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ピント合わせボタンと説明を非表示 */
+#focusButton,
+#focusStatus,
+.camera-focus-status {
+  display: none !important;
+}
+
+/* 撮影ボタンを大きくする */
+#captureButton {
+  font-size: 22px;
+  font-weight: bold;
+  padding: 16px 30px;
+  min-width: 150px;
+  min-height: 64px;
+  border-radius: 10px;
+  cursor: pointer;
+}
