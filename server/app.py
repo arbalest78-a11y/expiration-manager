@@ -60,25 +60,49 @@ def parse_expiry_date(text):
 
 
 def parse_expiry_month(text):
-    """年月表記から YYYY-MM を抽出する。日付がある表記は対象外。
+    """年月のみの賞味期限候補を抽出する。"""
+    text = re.sub(r"\s+", "", text).upper()
 
-    例: 2027.05/BB, 2027.05, 2027.5, 26.12
-    末尾の区切り記号は、OCRがBBを落とす場合への暫定対応。
-    欠けた年月日を誤って年月扱いする可能性があるため、必ず確認を要する。
-    """
-    text = text.strip().replace(" ", "").upper()
-
-    match = re.search(
-        r"(?<!\d)(20\d{2}|\d{2})[./-](0?[1-9]|1[0-2])(?:[./-]?BB|[./-])?$",
+    # 通常の年月表記
+    normal = re.search(
+        r"(?<!\d)(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])"
+        r"(?:[./月-]?BB|[./月-])?$",
         text,
     )
-    if not match:
-        return None
 
-    year = int(match.group(1))
+    if normal:
+        year_str, month_str = normal.groups()
+    else:
+        # OCRで「年」「月」が数字に誤認識された場合の暫定対応
+        patterns = [
+            # 202705
+            r"(20\d{2})(0[1-9]|1[0-2])",
+
+            # 2027059（末尾の「月」を誤認識した可能性）
+            r"(20\d{2})(0[1-9]|1[0-2])[19]",
+
+            # 20278051（「年」「月」を誤認識した可能性）
+            r"(20\d{2})8(0[1-9]|1[0-2])1",
+        ]
+
+        match = None
+
+        for pattern in patterns:
+            match = re.fullmatch(pattern, text)
+            if match:
+                break
+
+        if not match:
+            return None
+
+        year_str, month_str = match.groups()
+
+    year = int(year_str)
     if year < 100:
         year += 2000
-    month = int(match.group(2))
+
+    month = int(month_str)
+
     return f"{year:04d}-{month:02d}"
 
 
