@@ -559,9 +559,7 @@ ocrButton.addEventListener('click', async function (event) {
       expiryDate.value = result.expiry
       ocrStatus.textContent = '賞味期限を読み取りました。'
     } else if (result.expiry_month) {
-      const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(
-        result.expiry_month
-      )
+      const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(result.expiry_month)
 
       if (!match) {
         ocrStatus.textContent = '年月の形式を確認できませんでした。'
@@ -573,14 +571,15 @@ ocrButton.addEventListener('click', async function (event) {
         const lastDay = new Date(year, month, 0).getDate()
 
         // YYYY-MM-DD形式に変換
-        const formattedDate =
-          `${match[1]}-${match[2]}-${String(lastDay).padStart(2, '0')}`
+        const formattedDate = `${match[1]}-${match[2]}-${String(
+          lastDay
+        ).padStart(2, '0')}`
 
         // 利用者に確認
         const confirmed = window.confirm(
           `賞味期限を「${year}年${month}月」と認識しました。\n\n` +
-          `実物の表記を確認してください。\n` +
-          `${year}年${month}月${lastDay}日（月末）として入力しますか？`
+            `実物の表記を確認してください。\n` +
+            `${year}年${month}月${lastDay}日（月末）として入力しますか？`
         )
 
         if (confirmed) {
@@ -597,7 +596,6 @@ ocrButton.addEventListener('click', async function (event) {
     } else {
       ocrStatus.textContent = '賞味期限を認識できませんでした。'
     }
-
   } catch (error) {
     console.error(error)
 
