@@ -60,49 +60,41 @@ def parse_expiry_date(text):
 
 
 def parse_expiry_month(text):
-    """年月のみの賞味期限候補を抽出する。"""
+    """年月のみの賞味期限候補を抽出する。推測した年月は登録前に必ず確認する。"""
     text = re.sub(r"\s+", "", text).upper()
 
-    # 通常の年月表記
-    normal = re.search(
-        r"(?<!\d)(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])"
+    # 通常表記: 2027年05月、2027.05/BB、2027/05 など
+    normal = re.fullmatch(
+        r"B?(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])"
         r"(?:[./月-]?BB|[./月-])?$",
         text,
     )
-
     if normal:
         year_str, month_str = normal.groups()
     else:
-        # OCRで「年」「月」が数字に誤認識された場合の暫定対応
+        # 日本語の「年」「月」がOCRで数字に誤認識されたケース。
+        # 文字列全体が一致する場合のみ採用し、誤検出を抑える。
+        # 先頭の B はOCRが混入させた1文字としてだけ許容する。
+        ocr_text = text[1:] if text.startswith("B") else text
         patterns = [
-            # 202705
-            r"(20\d{2})(0[1-9]|1[0-2])",
-
-            # 2027059（末尾の「月」を誤認識した可能性）
-            r"(20\d{2})(0[1-9]|1[0-2])[19]",
-
-            # 20278051（「年」「月」を誤認識した可能性）
-            r"(20\d{2})8(0[1-9]|1[0-2])1",
+            # 202705、2027050、2027051、2027059（末尾が「月」の誤認識）
+            r"(20\d{2})(0[1-9]|1[0-2])[019]?",
+            # 2027805、20278051（「年」を8、末尾の「月」を1と誤認識）
+            r"(20\d{2})8(0[1-9]|1[0-2])1?",
         ]
-
         match = None
-
         for pattern in patterns:
-            match = re.fullmatch(pattern, text)
+            match = re.fullmatch(pattern, ocr_text)
             if match:
                 break
-
         if not match:
             return None
-
         year_str, month_str = match.groups()
 
     year = int(year_str)
     if year < 100:
         year += 2000
-
     month = int(month_str)
-
     return f"{year:04d}-{month:02d}"
 
 
