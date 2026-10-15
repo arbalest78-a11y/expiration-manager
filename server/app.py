@@ -148,8 +148,11 @@ def ocr():
         )
 
         image_variants = [
-            ("full-soft", soft),
             ("trim-medium", center),
+            (
+                "trim-binary",
+                center.point(lambda pixel: 0 if pixel < 150 else 255),
+            ),
         ]
 
         # 横一列の文字を認識するPSMを使用
