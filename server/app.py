@@ -125,29 +125,36 @@ def ocr():
         image = Image.open(image_file.stream)
         width, height = image.size
 
-        # ガイド内で既に切り抜かれた画像を受け取り、3倍に拡大する
-        image = image.resize((width * 3, height * 3))
-        image = ImageOps.grayscale(image)
-        image = ImageOps.autocontrast(image)
-        image = ImageEnhance.Contrast(image).enhance(2.0)
-        image = ImageEnhance.Sharpness(image).enhance(2.0)
-        image = ImageOps.expand(image, border=20, fill=255)
+        # スマートフォンから送られた画像を3倍に拡大
+        image = image.convert("RGB").resize(
+            (width * 3, height * 3), Image.Resampling.LANCZOS
+        )
 
-        width, height = image.size
-        image_variants = [
+        # 画像のコントラストとシャープネスを調整
+        gray = ImageOps.autocontrast(ImageOps.grayscale(image))
+        soft = ImageEnhance.Contrast(gray).enhance(1.3)
+        soft = ImageEnhance.Sharpness(soft).enhance(1.2)
+
+        # 画像全体と中央部分を比較
+        width, height = soft.size
+
+        center = soft.crop(
             (
-                "trim-medium",
-                image.crop(
-                    (
-                        int(width * 0.08),
-                        int(height * 0.18),
-                        int(width * 0.92),
-                        int(height * 0.82),
-                    )
-                ),
-            ),
+                int(width * 0.08),
+                int(height * 0.18),
+                int(width * 0.92),
+                int(height * 0.82),
+            )
+        )
+
+        image_variants = [
+            ("full-soft", soft),
+            ("trim-medium", center),
         ]
-        psm_modes = [7, 8, 10, 13]
+
+        # 横一列の文字を認識するPSMを使用
+        psm_modes = [7, 8]
+
         date_counts = {}
         month_counts = {}
         ocr_results = []
