@@ -65,6 +65,15 @@ def parse_expiry_month(text):
     # OCR が先頭に付けた縦線だけを除去する（例: "| 2027845"）
     text = re.sub(r"^[|｜]+", "", text)
 
+    # 日本語の「年」「月」が E、N に誤認識された場合
+    # 例: "fe 2027e4n" → 2027年4月の候補
+    ocr_month = re.fullmatch(r"(?:FE)?(20\d{2})E(0?[1-9]|1[0-2])N", text)
+
+    if ocr_month:
+        year = int(ocr_month.group(1))
+        month = int(ocr_month.group(2))
+        return f"{year:04d}-{month:02d}"
+
     # 通常表記: 2027年05月、2027.05/BB、2027/05 など
     normal = re.fullmatch(
         r"B?(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])" r"(?:[./月-]?BB|[./月-])?$",
