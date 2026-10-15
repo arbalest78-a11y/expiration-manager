@@ -14,7 +14,8 @@ import {
   closeForm
 } from './form.js'
 
-import { requestOcr } from './ocr-api.js'
+import { setupCamera } from './camera.js'
+import { setupOcr } from './ocr-handler.js'
 
 import {
   addButton,
@@ -31,12 +32,6 @@ import {
   removeImageButton,
   ocrButton,
   ocrStatus,
-  startCameraButton,
-  cameraArea,
-  cameraVideo,
-  captureButton,
-  stopCameraButton,
-  cameraCanvas,
   searchInput,
   sortSelect,
   storageFilter,
@@ -51,15 +46,6 @@ import {
   importFile
 } from './dom.js'
 
-import { readExpiryDate } from './ocr.js'
-
-const expiryGuide = document.getElementById('expiryGuide')
-const focusButton = document.getElementById('focusButton')
-const focusStatus = document.getElementById('focusStatus')
-
-const zoomControl = document.getElementById('zoomControl')
-const zoomSlider = document.getElementById('zoomSlider')
-const zoomValue = document.getElementById('zoomValue')
 
 // =========================
 // データ
@@ -71,13 +57,7 @@ let editingId = null
 let selectedImage = ''
 let expiryFilter = 'all'
 
-let cameraStream = null
 let ocrFile = null
-
-let barcodeControls = null
-let detectedJan = ''
-
-const janCodeReader = new ZXingBrowser.BrowserMultiFormatOneDReader()
 
 // =========================
 // 初期表示
@@ -85,6 +65,27 @@ const janCodeReader = new ZXingBrowser.BrowserMultiFormatOneDReader()
 
 renderItems()
 updateSummary()
+
+setupCamera({
+  onCaptureStart: function () {
+    ocrFile = null
+  },
+
+  onCapture: function (imageData, croppedFile) {
+    selectedImage = imageData
+    showImagePreview(selectedImage)
+
+    ocrFile = croppedFile
+    ocrButton.disabled = false
+  }
+})
+
+setupOcr({
+  getOcrFile: function () {
+    return ocrFile
+  }
+})
+
 
 // =========================
 // イベント
@@ -160,452 +161,6 @@ itemImage.addEventListener('change', function () {
   reader.readAsDataURL(file)
 })
 
-// =========================
-// カメラの赤いガイド枠をOCR用の画像範囲に変換
-// =========================
-
-// カメラ映像は object-fit: cover で一部が画面からはみ出す。
-// ガイド枠の画面上の位置を、撮影した元画像のピクセル座標に変換する。
-function getGuideCropCoordinates (
-  sourceWidth,
-  sourceHeight,
-  videoRect,
-  guideRect
-) {
-  if (!sourceWidth || !sourceHeight || !videoRect.width || !videoRect.height) {
-    throw new Error('カメラ映像のサイズを取得できません。')
-  }
-
-  const scale = Math.max(
-    videoRect.width / sourceWidth,
-    videoRect.height / sourceHeight
-  )
-  const hiddenX = (sourceWidth * scale - videoRect.width) / 2
-  const hiddenY = (sourceHeight * scale - videoRect.height) / 2
-
-  const x1 = Math.max(0, (guideRect.left - videoRect.left + hiddenX) / scale)
-  const y1 = Math.max(0, (guideRect.top - videoRect.top + hiddenY) / scale)
-  const x2 = Math.min(
-    sourceWidth,
-    (guideRect.right - videoRect.left + hiddenX) / scale
-  )
-  const y2 = Math.min(
-    sourceHeight,
-    (guideRect.bottom - videoRect.top + hiddenY) / scale
-  )
-
-  if (x2 <= x1 || y2 <= y1) {
-    throw new Error('ガイド枠の切り抜き範囲を計算できません。')
-  }
-
-  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
-}
-
-// 撮影画像のうち赤いガイド枠に重なっていた範囲だけをJPEGにする
-function createGuideOcrFile (sourceCanvas, videoRect, guideRect) {
-  return new Promise(function (resolve, reject) {
-    try {
-      const area = getGuideCropCoordinates(
-        sourceCanvas.width,
-        sourceCanvas.height,
-        videoRect,
-        guideRect
-      )
-      const outputCanvas = document.createElement('canvas')
-      outputCanvas.width = Math.max(1, Math.round(area.width))
-      outputCanvas.height = Math.max(1, Math.round(area.height))
-      const context = outputCanvas.getContext('2d')
-
-      context.drawImage(
-        sourceCanvas,
-        area.x,
-        area.y,
-        area.width,
-        area.height,
-        0,
-        0,
-        outputCanvas.width,
-        outputCanvas.height
-      )
-
-      outputCanvas.toBlob(
-        function (blob) {
-          if (!blob) {
-            reject(new Error('OCR用画像の切り抜きに失敗しました。'))
-            return
-          }
-          resolve(new File([blob], 'expiry-guide.jpg', { type: 'image/jpeg' }))
-        },
-        'image/jpeg',
-        0.95
-      )
-    } catch (error) {
-      reject(error)
-    }
-  })
-}
-
-async function startJanScan () {
-  if (!cameraStream) {
-    return
-  }
-
-  detectedJan = ''
-
-  try {
-    barcodeControls = await janCodeReader.decodeFromStream(
-      cameraStream,
-      cameraVideo,
-      function (result) {
-        if (!result) {
-          return
-        }
-
-        const code = result.getText()
-
-        // JANコードは主に8桁または13桁
-        if (!/^(?:\d{8}|\d{13})$/.test(code)) {
-          return
-        }
-
-        // 同じコードを何度も処理しない
-        if (detectedJan === code) {
-          return
-        }
-
-        detectedJan = code
-
-        console.log('JANコードを読み取りました:', detectedJan)
-
-        // ocrStatus.textContent = 'JANコードを読み取りました：' + detectedJan
-      }
-    )
-  } catch (error) {
-    console.error('JANコード読み取りエラー:', error)
-
-    ocrStatus.textContent = 'JANコードの読み取りを開始できませんでした。'
-  }
-}
-
-// =========================
-// カメラ
-// =========================
-
-// 対応端末でのみ、ボタンから単発オートフォーカスを要求する。
-// 非対応のブラウザでは操作できないことを明示する。
-focusButton.addEventListener('click', async function () {
-  const track = cameraStream?.getVideoTracks()[0]
-  if (!track || track.readyState !== 'live') {
-    focusStatus.textContent = 'カメラが起動していません。'
-    return
-  }
-
-  const capabilities =
-    typeof track.getCapabilities === 'function' ? track.getCapabilities() : {}
-  const modes = Array.isArray(capabilities.focusMode)
-    ? capabilities.focusMode
-    : []
-  if (!modes.includes('single-shot')) {
-    focusButton.disabled = true
-    focusStatus.textContent =
-      'この端末のブラウザは手動ピント合わせに対応していません。'
-    return
-  }
-
-  focusButton.disabled = true
-  focusStatus.textContent = 'ピント合わせを要求しています...'
-  try {
-    // 毎回単発AFを要求するため、前回もsingle-shotだった場合は
-    // 対応しているときだけcontinuousへ戻してから切り替える。
-    if (
-      track.getSettings().focusMode === 'single-shot' &&
-      modes.includes('continuous')
-    ) {
-      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
-    }
-
-    await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] })
-    const appliedMode = track.getSettings().focusMode
-    if (appliedMode && appliedMode !== 'single-shot') {
-      focusStatus.textContent =
-        'ピント設定が適用されたことを確認できませんでした。'
-    } else {
-      focusStatus.textContent =
-        'ピント合わせを要求しました。文字が鮮明になったか確認してください。'
-    }
-  } catch (error) {
-    console.error('手動フォーカスエラー:', error)
-    focusStatus.textContent =
-      'ピント合わせに失敗しました。少し距離を離して試してください。'
-  } finally {
-    if (track.readyState === 'live') focusButton.disabled = false
-  }
-})
-
-// カメラを起動
-startCameraButton.addEventListener('click', async function () {
-  focusButton.disabled = true
-  focusStatus.textContent = ''
-  try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: {
-          ideal: 'environment'
-        }
-      },
-      audio: false
-    })
-
-    // 使用中のカメラトラックを取得
-    const videoTrack = cameraStream.getVideoTracks()[0]
-
-    let focusModeText = '取得できません'
-    let zoomModeText = '非対応'
-
-    if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
-      const capabilities = videoTrack.getCapabilities()
-
-      console.log('カメラ capabilities:', capabilities)
-
-      const focusModes = Array.isArray(capabilities.focusMode)
-        ? capabilities.focusMode
-        : []
-      focusButton.disabled = !focusModes.includes('single-shot')
-      if (focusButton.disabled) {
-        focusStatus.textContent =
-          '手動ピント合わせ非対応（自動フォーカスは利用できる場合があります）。'
-      } else {
-        focusStatus.textContent =
-          '文字がぼやけていたら「ピントを合わせる」を押してください。'
-      }
-
-      // 連続オートフォーカス確認
-      if (
-        Array.isArray(capabilities.focusMode) &&
-        capabilities.focusMode.includes('continuous')
-      ) {
-        await videoTrack.applyConstraints({
-          advanced: [
-            {
-              focusMode: 'continuous'
-            }
-          ]
-        })
-
-        const settings = videoTrack.getSettings()
-
-        console.log('カメラ settings:', settings)
-
-        focusModeText = settings.focusMode || '取得できません'
-      } else {
-        focusModeText = 'continuous 非対応'
-      }
-
-      // ズーム対応確認
-      if (capabilities.zoom) {
-        const zoom = capabilities.zoom
-        const settings = videoTrack.getSettings()
-
-        zoomModeText = zoom.min + ' ～ ' + zoom.max
-
-        zoomSlider.min = zoom.min
-        zoomSlider.max = zoom.max
-        zoomSlider.step = zoom.step || 0.1
-        zoomSlider.value = settings.zoom || zoom.min
-
-        zoomValue.textContent = zoomSlider.value
-        zoomControl.hidden = false
-
-        zoomSlider.oninput = async function () {
-          const value = Number(zoomSlider.value)
-
-          zoomValue.textContent = value
-
-          try {
-            await videoTrack.applyConstraints({
-              advanced: [
-                {
-                  zoom: value
-                }
-              ]
-            })
-          } catch (error) {
-            console.error('ズーム変更エラー:', error)
-          }
-        }
-
-        console.log('ズーム capabilities:', zoom)
-      } else {
-        zoomControl.hidden = true
-      }
-    }
-
-    if (focusStatus.textContent === '') {
-      focusStatus.textContent = '手動ピント合わせの対応状況を確認できません。'
-    }
-    cameraVideo.srcObject = cameraStream
-    cameraArea.hidden = false
-
-    ocrStatus.textContent =
-      'フォーカス: ' + focusModeText + ' / ズーム: ' + zoomModeText
-
-    await startJanScan()
-  } catch (error) {
-    console.error(error)
-
-    ocrStatus.textContent = 'カメラを起動できませんでした。'
-  }
-})
-
-// 撮影：商品写真は全体を保存し、OCRにはガイド枠内だけを送る
-captureButton.addEventListener('click', async function () {
-  if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
-    ocrStatus.textContent =
-      'カメラの準備ができていません。少し待ってから撮影してください。'
-    return
-  }
-
-  captureButton.disabled = true
-  ocrButton.disabled = true
-  ocrFile = null
-  ocrStatus.textContent = '撮影画像を準備しています...'
-
-  try {
-    // カメラを閉じる前に、画面上の映像とガイド枠の位置を記録する
-    const videoRect = cameraVideo.getBoundingClientRect()
-    const guideRect = expiryGuide.getBoundingClientRect()
-
-    cameraCanvas.width = cameraVideo.videoWidth
-    cameraCanvas.height = cameraVideo.videoHeight
-    const context = cameraCanvas.getContext('2d')
-    context.drawImage(
-      cameraVideo,
-      0,
-      0,
-      cameraCanvas.width,
-      cameraCanvas.height
-    )
-
-    // 商品用の写真は従来どおり全体をプレビュー・保存する
-    selectedImage = cameraCanvas.toDataURL('image/jpeg', 0.9)
-    showImagePreview(selectedImage)
-
-    // OCRに送るのは赤いガイド枠内を自動で切り抜いた画像
-    ocrFile = await createGuideOcrFile(cameraCanvas, videoRect, guideRect)
-    ocrButton.disabled = false
-    ocrStatus.textContent = '撮影しました。赤い枠内の賞味期限を読み取れます。'
-  } catch (error) {
-    console.error('ガイド枠の切り抜きエラー:', error)
-    ocrStatus.textContent =
-      '撮影画像の準備に失敗しました。もう一度撮影してください。'
-  } finally {
-    captureButton.disabled = false
-    stopCamera()
-  }
-})
-
-// カメラを閉じる
-stopCameraButton.addEventListener('click', function () {
-  stopCamera()
-})
-
-// カメラ停止
-function stopCamera () {
-  focusButton.disabled = true
-  focusStatus.textContent = ''
-  if (barcodeControls) {
-    barcodeControls.stop()
-    barcodeControls = null
-  }
-
-  if (cameraStream) {
-    cameraStream.getTracks().forEach(function (track) {
-      track.stop()
-    })
-
-    cameraStream = null
-  }
-
-  cameraVideo.srcObject = null
-  cameraArea.hidden = true
-}
-
-// OCRボタン
-ocrButton.addEventListener('click', async function (event) {
-  event.preventDefault()
-
-  console.log('OCRボタンが押されました')
-
-  const file = ocrFile
-
-  if (!file) {
-    ocrStatus.textContent = '画像を選択してください。'
-    return
-  }
-
-  ocrButton.disabled = true
-  ocrStatus.textContent = '画像を読み取っています...'
-
-  try {
-    const result = await requestOcr(file)
-
-    console.log('Python OCR結果:', result)
-
-    if (result.name) {
-      itemName.value = result.name
-    }
-
-    if (result.expiry) {
-      expiryDate.value = result.expiry
-      ocrStatus.textContent = '賞味期限を読み取りました。'
-    } else if (result.expiry_month) {
-      const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(result.expiry_month)
-
-      if (!match) {
-        ocrStatus.textContent = '年月の形式を確認できませんでした。'
-      } else {
-        const year = Number(match[1])
-        const month = Number(match[2])
-
-        // 月末の日付を取得
-        const lastDay = new Date(year, month, 0).getDate()
-
-        // YYYY-MM-DD形式に変換
-        const formattedDate = `${match[1]}-${match[2]}-${String(
-          lastDay
-        ).padStart(2, '0')}`
-
-        // 利用者に確認
-        const confirmed = window.confirm(
-          `賞味期限を「${year}年${month}月」と認識しました。\n\n` +
-            `実物の表記を確認してください。\n` +
-            `${year}年${month}月${lastDay}日（月末）として入力しますか？`
-        )
-
-        if (confirmed) {
-          expiryDate.value = formattedDate
-
-          ocrStatus.textContent =
-            `賞味期限欄に${formattedDate}を入力しました。` +
-            '保存ボタンで登録してください。'
-        } else {
-          ocrStatus.textContent =
-            '年月のみの賞味期限の反映をキャンセルしました。'
-        }
-      }
-    } else {
-      ocrStatus.textContent = '賞味期限を認識できませんでした。'
-    }
-  } catch (error) {
-    console.error(error)
-
-    ocrStatus.textContent = '画像の読み取りに失敗しました。'
-  } finally {
-    ocrButton.disabled = false
-  }
-})
-
-// 選択・登録済みの写真を削除
 removeImageButton.addEventListener('click', function () {
   selectedImage = ''
   ocrFile = null
