@@ -65,8 +65,7 @@ def parse_expiry_month(text):
 
     # 通常表記: 2027年05月、2027.05/BB、2027/05 など
     normal = re.fullmatch(
-        r"B?(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])"
-        r"(?:[./月-]?BB|[./月-])?$",
+        r"B?(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])" r"(?:[./月-]?BB|[./月-])?$",
         text,
     )
     if normal:
@@ -154,12 +153,7 @@ def ocr():
             for psm in psm_modes:
                 ocr_start = time.perf_counter()
                 recognized_text = pytesseract.image_to_string(
-                    variant_image,
-                    lang="eng",
-                    config=(
-                        f"--psm {psm} "
-                        "-c tessedit_char_whitelist=0123456789./-B"
-                    ),
+                    variant_image, lang="jpn+eng", config=f"--psm {psm}"
                 ).strip()
                 ocr_elapsed = time.perf_counter() - ocr_start
 
