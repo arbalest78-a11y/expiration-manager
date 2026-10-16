@@ -1,24 +1,17 @@
-// OCRサーバーへ画像を送る処理
-// 現在はPython未導入のためテストデータを返す
-
-// OCRサーバーへ画像を送る処理
-
-export async function requestOcr (file) {
+// Render の OCR API。自動スキャン時には signal で不要な通信を中断できる。
+export async function requestOcr (file, { signal } = {}) {
   const formData = new FormData()
-
   formData.append('image', file)
 
-  const response = await fetch(
-    'https://expiration-manager.onrender.com/ocr', {
+  const response = await fetch('https://expiration-manager.onrender.com/ocr', {
     method: 'POST',
-    body: formData
+    body: formData,
+    signal
   })
 
   if (!response.ok) {
-    throw new Error('OCRサーバーとの通信に失敗しました。')
+    throw new Error(`OCRサーバーとの通信に失敗しました（HTTP ${response.status}）。`)
   }
 
-  const result = await response.json()
-
-  return result
+  return response.json()
 }
