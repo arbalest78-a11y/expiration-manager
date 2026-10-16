@@ -687,12 +687,8 @@ textarea {
   line-height: 1.5;
 }
 
-/* ピント合わせボタンと説明を非表示 */
-#focusButton,
-#focusStatus,
-.camera-focus-status {
-  display: none !important;
-}
+/* ピント合わせボタンと対応状況は表示する。
+   対応していない端末ではボタンが無効化され、説明のみ表示される。 */
 
 /* 撮影ボタンを大きくする */
 #captureButton {
