@@ -304,9 +304,10 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
     try {
       cameraStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: {
-            ideal: 'environment'
-          }
+          facingMode: { ideal: 'environment' },
+          // 文字の輪郭を残すため高めの解像度を希望する。端末に合わせて調整される。
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
         },
         audio: false
       })
@@ -335,22 +336,23 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
             '文字がぼやけていたら「ピントを合わせる」を押してください。'
         }
 
-        // 連続オートフォーカス
-        if (
-          Array.isArray(capabilities.focusMode) &&
-          capabilities.focusMode.includes('continuous')
-        ) {
-          await videoTrack.applyConstraints({
-            advanced: [{ focusMode: 'continuous' }]
-          })
-
-          const settings = videoTrack.getSettings()
-
-          console.log('カメラ settings:', settings)
-
-          focusModeText = settings.focusMode || '取得できません'
+        // 連続オートフォーカスを試す。端末が拒否してもカメラ全体は停止しない。
+        if (focusModes.includes('continuous')) {
+          try {
+            await videoTrack.applyConstraints({
+              advanced: [{ focusMode: 'continuous' }]
+            })
+            const settings = videoTrack.getSettings()
+            console.log('カメラ settings:', settings)
+            focusModeText = settings.focusMode || '自動フォーカス要求済み（適用状態は不明）'
+          } catch (focusError) {
+            console.warn('連続オートフォーカス設定を適用できませんでした:', focusError)
+            focusModeText = '標準設定を使用'
+            focusStatus.textContent =
+              '自動ピント設定を適用できませんでした。距離と明るさを調整してください。'
+          }
         } else {
-          focusModeText = 'continuous 非対応'
+          focusModeText = '標準設定を使用（continuous 非対応）'
         }
 
         // =====================================
@@ -406,8 +408,8 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
 
       // 撮影ボタン不要。カメラのライブ映像から自動OCRを始める。
       const session = ++scanSession
-      setAutoStatus('自動読み取りを開始しました。赤枠に文字を合わせてください。')
-      scheduleAutoScan(session, 2500)
+      setAutoStatus('カメラのピントが安定するまで5秒待ちます。赤枠に文字を合わせてください。')
+      scheduleAutoScan(session, 5000)
     } catch (error) {
       console.error(error)
       stopCamera()
