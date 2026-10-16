@@ -68,8 +68,9 @@ export function setupOcr ({ getOcrFile }) {
           // 利用者に確認
           const confirmed = window.confirm(
             `賞味期限を「${year}年${month}月」と認識しました。\n\n` +
-            `実物の表記を確認してください。\n` +
-            `${year}年${month}月${lastDay}日（月末）として入力しますか？`
+            `実物の表記が年月のみの場合に限り、\n` +
+            `${year}年${month}月${lastDay}日（月末）として入力しますか？\n\n` +
+            `「日」まで記載されている場合はキャンセルし、手動で入力してください。`
           )
 
           if (confirmed) {
