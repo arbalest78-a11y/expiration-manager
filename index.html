@@ -66,9 +66,15 @@
                 type="file"
                 id="itemImage"
                 accept="image/*"
-                capture="environment"
               />
 
+              <div id="cameraSelectRow" class="camera-select-row" hidden>
+                <label for="cameraSelect">使用するカメラ</label>
+                <select id="cameraSelect">
+                  <option value="">自動（背面カメラ）</option>
+                </select>
+                <small>ぼやける場合は別の背面カメラを選んでください。</small>
+              </div>
               <button type="button" id="startCameraButton">カメラを起動</button>
 
               <div id="cameraArea" hidden>
@@ -77,7 +83,7 @@
                   <div id="expiryGuide" aria-hidden="true"></div>
                 </div>
                 <p class="camera-guide-instruction">
-                  赤い枠に賞味期限を合わせてください。カメラ起動中は自動で読み取りを試みます。
+                  赤枠に賞味期限を合わせてください。自動で鮮明なフレームを選び、読み取ります。
                 </p>
                 <button type="button" id="focusButton" disabled>ピントを合わせる</button>
                 <p id="focusStatus" class="camera-focus-status" role="status" aria-live="polite"></p>
