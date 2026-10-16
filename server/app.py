@@ -8,98 +8,68 @@ import os
 import time
 
 
+def normalize_ocr_text(text):
+    """OCRで誤読しやすい数字と区切り記号の表記を統一。"""
+    replacements = str.maketrans(
+        "０１２３４５６７８９．，／－", "0123456789.,/-"
+    )
+    text = text.translate(replacements).replace("。", ".")
+    # 印字されたピリオドがカンマとして認識されることがある
+    return re.sub(r"(?<=\d),(?=\d)", ".", text)
+
+
 def parse_expiry_date(text):
-    """OCR文字列から日付（YYYY-MM-DD）を抽出する。既存の判定を維持。"""
-    text = text.strip().replace(" ", "")
-
+    """OCR文字列から完全な日付（YYYY-MM-DD）を抽出。"""
+    text = re.sub(r"\s+", "", normalize_ocr_text(text))
     patterns = [
-        # 2026.09.20
-        (
-            r"(20\d{2})[./-](\d{1,2})[./-](\d{1,2})",
-            False,
-        ),
-        # 26.09.20
-        # 前後にOCRの余計な数字があっても、
-        # 途中の「26.09.20」を拾えるようにする
-        (
-            r"(\d{2})[./-](\d{1,2})[./-](\d{1,2})",
-            True,
-        ),
-        # 2609.20
-        (
-            r"(\d{2})(\d{2})[./-](\d{1,2})",
-            True,
-        ),
+        (r"(?<!\d)(20\d{2})[./-](\d{1,2})[./-](\d{1,2})(?!\d)", False),
+        (r"(?<!\d)(20\d{2})年(\d{1,2})月(\d{1,2})日?", False),
+        (r"(?<!\d)(\d{2})[./-](\d{1,2})[./-](\d{1,2})(?!\d)", True),
+        (r"(?<!\d)(\d{2})(\d{2})[./-](\d{1,2})(?!\d)", True),
     ]
-
     for pattern, short_year in patterns:
-        match = re.search(pattern, text)
-
-        if not match:
-            continue
-
-        year = int(match.group(1))
-
-        if short_year:
-            year += 2000
-
-        month = int(match.group(2))
-        day = int(match.group(3))
-
-        if not 1 <= month <= 12:
-            continue
-
-        max_day = calendar.monthrange(year, month)[1]
-
-        if not 1 <= day <= max_day:
-            continue
-
-        return f"{year:04d}-{month:02d}-{day:02d}"
-
+        for match in re.finditer(pattern, text):
+            year = int(match.group(1)) + (2000 if short_year else 0)
+            month = int(match.group(2))
+            day = int(match.group(3))
+            if not (1 <= month <= 12):
+                continue
+            if not (1 <= day <= calendar.monthrange(year, month)[1]):
+                continue
+            return f"{year:04d}-{month:02d}-{day:02d}"
     return None
 
 
 def parse_expiry_month(text):
-    """年月のみの賞味期限候補を抽出する。推測した年月は登録前に必ず確認する。"""
-    text = re.sub(r"\s+", "", text).upper()
-    # OCR が先頭に付けた縦線だけを除去する（例: "| 2027845"）
+    """年月の候補を抽出。日付を認識できない場合も、必ず入力前に人が確認する。"""
+    text = re.sub(r"\s+", "", normalize_ocr_text(text)).upper()
     text = re.sub(r"^[|｜]+", "", text)
 
-    # 日本語の「年」「月」が E、N に誤認識された場合
-    # 例: "fe 2027e4n" → 2027年4月の候補
+    # 例: FE2027E4N（「年」「月」が英字に誤認識）
     ocr_month = re.fullmatch(r"(?:FE)?(20\d{2})E(0?[1-9]|1[0-2])N", text)
-
     if ocr_month:
-        year = int(ocr_month.group(1))
-        month = int(ocr_month.group(2))
-        return f"{year:04d}-{month:02d}"
+        return f"{int(ocr_month.group(1)):04d}-{int(ocr_month.group(2)):02d}"
 
-    # 通常表記: 2027年05月、2027.05/BB、2027/05 など
-    normal = re.fullmatch(
-        r"B?(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])" r"(?:[./月-]?BB|[./月-])?$",
+    # 例: 2026.09.／2026,09／余計な印字2026.09.20
+    # 文字列全体ではなく、境界がある年月部分を抽出する
+    normal = re.search(
+        r"(?<!\d)(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])(?!\d)",
         text,
     )
     if normal:
         year_str, month_str = normal.groups()
     else:
-        # 日本語の「年」「月」がOCRで数字に誤認識されたケース。
-        # 文字列全体が一致する場合のみ採用し、誤検出を抑える。
-        # 先頭の B はOCRが混入させた1文字としてだけ許容する。
+        # 年/月の漢字が数字になってしまった過去のケース（誤検出防止のため全体一致）
         ocr_text = text[1:] if text.startswith("B") else text
         patterns = [
-            # 202705、2027050、2027051、2027059（末尾が「月」の誤認識）
             r"(20\d{2})(0[1-9]|1[0-2])[019]?",
-            # 2027805、20278051（「年」を8、末尾の「月」を1と誤認識）
             r"(20\d{2})8(0[1-9]|1[0-2])1?",
-            # 2027845: 「年」→8、「月」→5 と誤認識した場合（1桁月）
-            # 取り違えを防ぐため、この形式は月末尾が5の場合だけ候補にする
             r"(20\d{2})8([1-9])5",
         ]
-        match = None
-        for pattern in patterns:
-            match = re.fullmatch(pattern, ocr_text)
-            if match:
-                break
+        match = next(
+            (m for pattern in patterns if (m := re.fullmatch(pattern, ocr_text))),
+            None,
+        )
         if not match:
             return None
         year_str, month_str = match.groups()
@@ -107,8 +77,7 @@ def parse_expiry_month(text):
     year = int(year_str)
     if year < 100:
         year += 2000
-    month = int(month_str)
-    return f"{year:04d}-{month:02d}"
+    return f"{year:04d}-{int(month_str):02d}"
 
 
 app = Flask(__name__)
@@ -131,53 +100,52 @@ def ocr():
     print("受信した画像:", image_file.filename)
 
     try:
-        image = Image.open(image_file.stream)
-        width, height = image.size
+        image = Image.open(image_file.stream).convert("RGB")
+        original_width, original_height = image.size
 
-        # スマートフォンから送られた画像を3倍に拡大
-        image = image.convert("RGB").resize(
-            (width * 3, height * 3), Image.Resampling.LANCZOS
+        # 画像全体は従来通りの前処理を行う
+        enlarged = image.resize(
+            (original_width * 3, original_height * 3), Image.Resampling.LANCZOS
         )
-
-        # 画像のコントラストとシャープネスを調整
-        gray = ImageOps.autocontrast(ImageOps.grayscale(image))
+        gray = ImageOps.autocontrast(ImageOps.grayscale(enlarged))
         soft = ImageEnhance.Contrast(gray).enhance(1.3)
         soft = ImageEnhance.Sharpness(soft).enhance(1.2)
 
-        # 画像全体と中央部分を比較
         width, height = soft.size
-
         center = soft.crop(
-            (
-                int(width * 0.08),
-                int(height * 0.18),
-                int(width * 0.92),
-                int(height * 0.82),
-            )
+            (int(width * 0.08), int(height * 0.18),
+             int(width * 0.92), int(height * 0.82))
+        )
+
+        # ドット印字は拡大・強調で逆に読みにくくなる場合があるため、
+        # 元画像の左寄り中央帯（年月部分）も別途OCRにかける。
+        # ※年月は確定日付ではないので、フロント側での確認が必須。
+        original_gray = ImageOps.grayscale(image)
+        year_month_area = original_gray.crop(
+            (int(original_width * 0.10), int(original_height * 0.25),
+             int(original_width * 0.75), int(original_height * 0.75))
         )
 
         image_variants = [
-            ("trim-medium", center),
-            (
-                "trim-binary",
-                center.point(lambda pixel: 0 if pixel < 150 else 255),
-            ),
+            ("trim-medium", center, (7, 8), "jpn+eng", ""),
+            ("trim-binary", center.point(lambda p: 0 if p < 150 else 255),
+             (7, 8), "jpn+eng", ""),
+            ("yearmonth-left", year_month_area, (8,), "eng",
+             " -c tessedit_char_whitelist=0123456789.,/-"),
         ]
-
-        # 横一列の文字を認識するPSMを使用
-        psm_modes = [7, 8]
 
         date_counts = {}
         month_counts = {}
         ocr_results = []
 
-        for variant_name, variant_image in image_variants:
-            variant_image = ImageOps.expand(variant_image, border=20, fill=255)
+        for variant_name, variant_image, psm_modes, language, options in image_variants:
+            border = 8 if variant_name == "yearmonth-left" else 20
+            variant_image = ImageOps.expand(variant_image, border=border, fill=255)
 
             for psm in psm_modes:
                 ocr_start = time.perf_counter()
                 recognized_text = pytesseract.image_to_string(
-                    variant_image, lang="jpn+eng", config=f"--psm {psm}"
+                    variant_image, lang=language, config=f"--psm {psm}{options}"
                 ).strip()
                 ocr_elapsed = time.perf_counter() - ocr_start
 
@@ -191,7 +159,7 @@ def ocr():
                 if recognized_text:
                     ocr_results.append(recognized_text)
 
-                # 必ず年月日を先に解析。年月日が見つかった場合は年月候補に数えない
+                # 必ず年月日を先に解析。失敗時のみ年月候補として扱う
                 expiry_candidate = parse_expiry_date(recognized_text)
                 if expiry_candidate:
                     date_counts[expiry_candidate] = (
