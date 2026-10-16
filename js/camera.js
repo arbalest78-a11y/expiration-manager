@@ -10,6 +10,7 @@ import {
 } from './dom.js'
 
 import { createBarcodeScanner } from './barcode.js'
+import { requestOcr } from './ocr-api.js'
 
 const expiryGuide = document.getElementById('expiryGuide')
 const focusButton = document.getElementById('focusButton')
@@ -17,6 +18,7 @@ const focusStatus = document.getElementById('focusStatus')
 const zoomControl = document.getElementById('zoomControl')
 const zoomSlider = document.getElementById('zoomSlider')
 const zoomValue = document.getElementById('zoomValue')
+const autoScanStatus = document.getElementById('autoScanStatus')
 
 let cameraStream = null
 const barcodeScanner = createBarcodeScanner(cameraVideo, ocrStatus)
@@ -121,7 +123,110 @@ function createGuideOcrFile (sourceCanvas, videoRect, guideRect) {
 // カメラ機能の初期設定
 // =====================================
 
-export function setupCamera ({ onCaptureStart, onCapture }) {
+export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
+  // 自動OCR: サーバーに同時リクエストを送らない。停止時は結果を無視する。
+  let scanSession = 0
+  let scanTimer = null
+  let networkErrors = 0
+
+  function setAutoStatus (message) {
+    autoScanStatus.textContent = message
+  }
+
+  function cancelAutoScan () {
+    scanSession += 1
+    if (scanTimer !== null) clearTimeout(scanTimer)
+    scanTimer = null
+  }
+
+  function scheduleAutoScan (session, delayMs) {
+    if (session !== scanSession || !cameraStream) return
+    scanTimer = setTimeout(function () {
+      scanTimer = null
+      void scanFrame(session)
+    }, delayMs)
+  }
+
+  function displayDebugFile (file) {
+    let debugImage = document.getElementById('ocrDebugImage')
+    if (!debugImage) {
+      debugImage = document.createElement('img')
+      debugImage.id = 'ocrDebugImage'
+      debugImage.style.maxWidth = '300px'
+      debugImage.style.width = '100%'
+      debugImage.style.display = 'block'
+      debugImage.style.marginTop = '10px'
+      ocrStatus.after(debugImage)
+    }
+    // 再試行した画像の確認用。blob URLは読み込み後に解放する。
+    const imageUrl = URL.createObjectURL(file)
+    debugImage.onload = function () { URL.revokeObjectURL(imageUrl) }
+    debugImage.onerror = function () { URL.revokeObjectURL(imageUrl) }
+    debugImage.src = imageUrl
+  }
+
+  async function scanFrame (session) {
+    if (session !== scanSession || !cameraStream) return
+    if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
+      setAutoStatus('映像を準備しています…')
+      scheduleAutoScan(session, 700)
+      return
+    }
+
+    try {
+      // 画面の赤枠と同じ範囲だけを画像として送る。
+      const videoRect = cameraVideo.getBoundingClientRect()
+      const guideRect = expiryGuide.getBoundingClientRect()
+      cameraCanvas.width = cameraVideo.videoWidth
+      cameraCanvas.height = cameraVideo.videoHeight
+      cameraCanvas.getContext('2d').drawImage(
+        cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height
+      )
+      const ocrFile = await createGuideOcrFile(cameraCanvas, videoRect, guideRect)
+      if (session !== scanSession || !cameraStream) return
+
+      displayDebugFile(ocrFile)
+      setAutoStatus('賞味期限を自動読み取り中…（通信中）')
+      ocrStatus.textContent = 'カメラの赤枠内を読み取っています…'
+      // RenderではOCRに約20秒かかる場合があるため必ず応答を待つ。
+      const result = await requestOcr(ocrFile)
+      if (session !== scanSession || !cameraStream) return
+      networkErrors = 0
+      console.log('自動OCR結果:', result)
+
+      if (result.expiry || result.expiry_month) {
+        const decision = onAutoResult(result)
+        if (decision === 'accepted') {
+          // 認識したフレームを商品写真としても残す（保存は利用者が行う）。
+          const selectedImage = cameraCanvas.toDataURL('image/jpeg', 0.9)
+          onCapture(selectedImage, ocrFile)
+          stopCamera()
+          return
+        }
+        if (decision === 'rejected') {
+          // 同じ誤候補の確認画面が繰り返し出ないように停止する。
+          stopCamera()
+          return
+        }
+      }
+
+      setAutoStatus('まだ認識できません。赤枠に合わせたままお待ちください。')
+      ocrStatus.textContent = '賞味期限を検出できませんでした。自動的に再試行します。'
+      scheduleAutoScan(session, 3500)
+    } catch (error) {
+      if (session !== scanSession || !cameraStream) return
+      console.error('自動OCRエラー:', error)
+      networkErrors += 1
+      if (networkErrors >= 3) {
+        setAutoStatus('自動読み取りを中断しました。カメラを再起動するか手動で撮影してください。')
+        ocrStatus.textContent = 'OCRサーバーへの通信に繰り返し失敗しました。'
+        return
+      }
+      setAutoStatus('通信に失敗しました。少し待ってから再試行します。')
+      scheduleAutoScan(session, 8000)
+    }
+  }
+
   // ピント合わせ
   focusButton.addEventListener('click', async function () {
     const track = cameraStream?.getVideoTracks()[0]
@@ -187,6 +292,12 @@ export function setupCamera ({ onCaptureStart, onCapture }) {
   // =====================================
 
   startCameraButton.addEventListener('click', async function () {
+    if (cameraStream || startCameraButton.disabled) return
+    startCameraButton.disabled = true
+    networkErrors = 0
+    onCaptureStart()
+    ocrButton.disabled = true
+    setAutoStatus('カメラを準備しています…')
     focusButton.disabled = true
     focusStatus.textContent = ''
 
@@ -290,10 +401,16 @@ export function setupCamera ({ onCaptureStart, onCapture }) {
       ocrStatus.textContent =
         'フォーカス: ' + focusModeText + ' / ズーム: ' + zoomModeText
 
-      // JANコード読み取り開始
+      // JANコード読み取り開始。OCRとは別に継続して読み取る。
       await barcodeScanner.start(cameraStream)
+
+      // 撮影ボタン不要。カメラのライブ映像から自動OCRを始める。
+      const session = ++scanSession
+      setAutoStatus('自動読み取りを開始しました。赤枠に文字を合わせてください。')
+      scheduleAutoScan(session, 2500)
     } catch (error) {
       console.error(error)
+      stopCamera()
       ocrStatus.textContent = 'カメラを起動できませんでした。'
     }
   })
@@ -303,6 +420,8 @@ export function setupCamera ({ onCaptureStart, onCapture }) {
   // =====================================
 
   captureButton.addEventListener('click', async function () {
+    cancelAutoScan()
+    setAutoStatus('手動撮影に切り替えました。')
     if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
       ocrStatus.textContent =
         'カメラの準備ができていません。少し待ってから撮影してください。'
@@ -389,6 +508,9 @@ export function setupCamera ({ onCaptureStart, onCapture }) {
   // =====================================
 
   function stopCamera () {
+    cancelAutoScan()
+    startCameraButton.disabled = false
+    setAutoStatus('自動読み取りを停止しました。')
     focusButton.disabled = true
     focusStatus.textContent = ''
 
@@ -405,4 +527,6 @@ export function setupCamera ({ onCaptureStart, onCapture }) {
     cameraVideo.srcObject = null
     cameraArea.hidden = true
   }
+
+  return { stop: stopCamera }
 }

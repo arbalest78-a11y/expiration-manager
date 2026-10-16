@@ -66,7 +66,13 @@ let ocrFile = null
 renderItems()
 updateSummary()
 
-setupCamera({
+const ocrController = setupOcr({
+  getOcrFile: function () {
+    return ocrFile
+  }
+})
+
+const cameraController = setupCamera({
   onCaptureStart: function () {
     ocrFile = null
   },
@@ -77,13 +83,9 @@ setupCamera({
 
     ocrFile = croppedFile
     ocrButton.disabled = false
-  }
-})
+  },
 
-setupOcr({
-  getOcrFile: function () {
-    return ocrFile
-  }
+  onAutoResult: ocrController.handleAutomaticResult
 })
 
 
@@ -136,6 +138,7 @@ summaryBoxes.forEach(function (box) {
 // 商品写真を読み込む
 itemImage.addEventListener('change', function () {
   const file = itemImage.files[0]
+  cameraController.stop()
 
   if (!file) {
     ocrFile = null
@@ -174,6 +177,7 @@ removeImageButton.addEventListener('click', function () {
 
 // 商品登録フォームを表示
 addButton.addEventListener('click', function () {
+  cameraController.stop()
   editingId = null
   selectedImage = ''
   ocrFile = null
@@ -186,6 +190,7 @@ addButton.addEventListener('click', function () {
 
 // キャンセル
 cancelButton.addEventListener('click', function () {
+  cameraController.stop()
   editingId = null
   selectedImage = ''
   ocrFile = null
@@ -199,6 +204,7 @@ cancelButton.addEventListener('click', function () {
 // 保存
 itemForm.addEventListener('submit', function (event) {
   event.preventDefault()
+  cameraController.stop()
 
   console.log('フォーム送信が発生しました', event.submitter)
 
