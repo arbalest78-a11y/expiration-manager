@@ -80,6 +80,20 @@ def parse_expiry_month(text):
     return f"{year:04d}-{int(month_str):02d}"
 
 
+def parse_expiry_month_fuzzy(text):
+    """年月専用の広い切り抜きから「年→8」の誤認識を候補として抽出する。
+
+    例: 202681 1 A+ -> 2026-11
+    曖昧な1桁月は誤判定しやすいため、この補正では扱わない。
+    この候補を返しても、ブラウザでユーザーの確認が必要。
+    """
+    normalized = re.sub(r"\s+", "", normalize_ocr_text(text)).upper()
+    match = re.search(r"(?<!\d)(20\d{2})8(0[1-9]|1[0-2])(?=\D|$)", normalized)
+    if not match:
+        return None
+    return f"{int(match.group(1)):04d}-{int(match.group(2)):02d}"
+
+
 app = Flask(__name__)
 CORS(app)
 
@@ -126,12 +140,21 @@ def ocr():
              int(original_width * 0.75), int(original_height * 0.75))
         )
 
+        # ボトルの曲面印字では上下を狭く切ると文字が欠けやすい。
+        # 広めの領域を元画像から切り出し、文字種の制限なしで1行OCRする。
+        # 「2026年11月+C」など、右側に別の印字が続くケースも想定。
+        year_month_wide = original_gray.crop(
+            (int(original_width * 0.05), int(original_height * 0.05),
+             int(original_width * 0.78), int(original_height * 0.90))
+        )
+
         image_variants = [
             ("trim-medium", center, (7, 8), "jpn+eng", ""),
             ("trim-binary", center.point(lambda p: 0 if p < 150 else 255),
              (7, 8), "jpn+eng", ""),
             ("yearmonth-left", year_month_area, (8,), "eng",
              " -c tessedit_char_whitelist=0123456789.,/-"),
+            ("yearmonth-wide", year_month_wide, (7,), "eng", ""),
         ]
 
         date_counts = {}
@@ -139,7 +162,7 @@ def ocr():
         ocr_results = []
 
         for variant_name, variant_image, psm_modes, language, options in image_variants:
-            border = 8 if variant_name == "yearmonth-left" else 20
+            border = 8 if variant_name in ("yearmonth-left", "yearmonth-wide") else 20
             variant_image = ImageOps.expand(variant_image, border=border, fill=255)
 
             for psm in psm_modes:
@@ -168,6 +191,12 @@ def ocr():
                     continue
 
                 month_candidate = parse_expiry_month(recognized_text)
+                # 年/月の漢字が「8」等に化けた場合の限定的な救済策。
+                # ほかの画像領域には適用しない。
+                if not month_candidate and variant_name == "yearmonth-wide":
+                    month_candidate = parse_expiry_month_fuzzy(recognized_text)
+                    if month_candidate:
+                        print("年月の要確認候補 [wide]:", month_candidate, flush=True)
                 if month_candidate:
                     month_counts[month_candidate] = (
                         month_counts.get(month_candidate, 0) + 1
