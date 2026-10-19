@@ -26,18 +26,32 @@ const barcodeScanner = createBarcodeScanner(cameraVideo, ocrStatus)
 let cameraStream = null
 let selectedCameraId = ''
 
-function getGuideCropCoordinates (sourceWidth, sourceHeight, videoRect, guideRect) {
+function getGuideCropCoordinates (
+  sourceWidth,
+  sourceHeight,
+  videoRect,
+  guideRect
+) {
   if (!sourceWidth || !sourceHeight || !videoRect.width || !videoRect.height) {
     throw new Error('カメラ映像のサイズを取得できません。')
   }
   // object-fit: cover の中央トリミングとガイド枠の座標を一致させる。
-  const scale = Math.max(videoRect.width / sourceWidth, videoRect.height / sourceHeight)
+  const scale = Math.max(
+    videoRect.width / sourceWidth,
+    videoRect.height / sourceHeight
+  )
   const hiddenX = (sourceWidth * scale - videoRect.width) / 2
   const hiddenY = (sourceHeight * scale - videoRect.height) / 2
   const x1 = Math.max(0, (guideRect.left - videoRect.left + hiddenX) / scale)
   const y1 = Math.max(0, (guideRect.top - videoRect.top + hiddenY) / scale)
-  const x2 = Math.min(sourceWidth, (guideRect.right - videoRect.left + hiddenX) / scale)
-  const y2 = Math.min(sourceHeight, (guideRect.bottom - videoRect.top + hiddenY) / scale)
+  const x2 = Math.min(
+    sourceWidth,
+    (guideRect.right - videoRect.left + hiddenX) / scale
+  )
+  const y2 = Math.min(
+    sourceHeight,
+    (guideRect.bottom - videoRect.top + hiddenY) / scale
+  )
   if (x2 <= x1 || y2 <= y1) {
     throw new Error('ガイド枠の切り抜き範囲を計算できません。')
   }
@@ -54,23 +68,35 @@ function cropGuideFromCanvas (sourceCanvas) {
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(area.width))
   canvas.height = Math.max(1, Math.round(area.height))
-  canvas.getContext('2d').drawImage(
-    sourceCanvas,
-    area.x, area.y, area.width, area.height,
-    0, 0, canvas.width, canvas.height
-  )
+  canvas
+    .getContext('2d')
+    .drawImage(
+      sourceCanvas,
+      area.x,
+      area.y,
+      area.width,
+      area.height,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    )
   return canvas
 }
 
 function canvasToOcrFile (canvas) {
   return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => {
-      if (!blob) {
-        reject(new Error('OCR画像を生成できませんでした。'))
-        return
-      }
-      resolve(new File([blob], 'expiry-guide.jpg', { type: 'image/jpeg' }))
-    }, 'image/jpeg', 0.95)
+    canvas.toBlob(
+      blob => {
+        if (!blob) {
+          reject(new Error('OCR画像を生成できませんでした。'))
+          return
+        }
+        resolve(new File([blob], 'expiry-guide.jpg', { type: 'image/jpeg' }))
+      },
+      'image/jpeg',
+      0.95
+    )
   })
 }
 
@@ -97,7 +123,8 @@ function calculateSharpness (canvas) {
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x
-      const value = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w]
+      const value =
+        4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w]
       sum += value
       sumSquares += value * value
       count++
@@ -106,7 +133,9 @@ function calculateSharpness (canvas) {
   return count ? Math.max(0, sumSquares / count - (sum / count) ** 2) : 0
 }
 
-function delay (ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
+function delay (ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
   let scanSession = 0
@@ -117,7 +146,9 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
   let networkErrors = 0
   let blurRetries = 0
 
-  const setAutoStatus = text => { autoScanStatus.textContent = text }
+  const setAutoStatus = text => {
+    autoScanStatus.textContent = text
+  }
 
   function cancelAutoScan () {
     scanSession++
@@ -162,7 +193,9 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
     const fullCanvas = document.createElement('canvas')
     fullCanvas.width = cameraVideo.videoWidth
     fullCanvas.height = cameraVideo.videoHeight
-    fullCanvas.getContext('2d').drawImage(cameraVideo, 0, 0, fullCanvas.width, fullCanvas.height)
+    fullCanvas
+      .getContext('2d')
+      .drawImage(cameraVideo, 0, 0, fullCanvas.width, fullCanvas.height)
     const ocrCanvas = cropGuideFromCanvas(fullCanvas)
     return { fullCanvas, ocrCanvas, score: calculateSharpness(ocrCanvas) }
   }
@@ -196,7 +229,9 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
       // 2回の待機後はOCRを行い、完全にスキャン不能になるのを防ぐ。
       if (best.score < 12 && blurRetries < 2) {
         blurRetries++
-        setAutoStatus('文字がぼやけています。少し離して明るい場所で固定してください。')
+        setAutoStatus(
+          '文字がぼやけています。少し離して明るい場所で固定してください。'
+        )
         scheduleAutoScan(session, 1500)
         return
       }
@@ -232,7 +267,9 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
           return
         }
       }
-      setAutoStatus('賞味期限を認識できませんでした。位置を調整して自動で再試行します。')
+      setAutoStatus(
+        '賞味期限を認識できませんでした。位置を調整して自動で再試行します。'
+      )
       ocrStatus.textContent = '認識できませんでした。次のフレームを試します。'
       scheduleAutoScan(session, 3500)
     } catch (error) {
@@ -241,7 +278,13 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
       console.error('自動OCRエラー:', error)
       networkErrors++
       if (networkErrors >= 3) {
-        setAutoStatus('通信が続けて失敗したため停止しました。カメラを再起動してください。')
+        stopCamera()
+
+        setAutoStatus(
+          '通信が3回連続で失敗しました。' +
+            '通信環境を確認して、再度カメラを起動してください。'
+        )
+
         return
       }
       setAutoStatus('通信に失敗しました。8秒後に再試行します。')
@@ -252,8 +295,9 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
   async function updateCameraChoices () {
     if (!navigator.mediaDevices.enumerateDevices) return
     try {
-      const devices = (await navigator.mediaDevices.enumerateDevices())
-        .filter(device => device.kind === 'videoinput' && device.deviceId)
+      const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
+        device => device.kind === 'videoinput' && device.deviceId
+      )
       cameraSelect.innerHTML = ''
       const auto = document.createElement('option')
       auto.value = ''
@@ -266,10 +310,16 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
         cameraSelect.appendChild(option)
       })
       cameraSelectRow.hidden = devices.length <= 1
-      const active = cameraStream?.getVideoTracks()[0]?.getSettings()?.deviceId || ''
-      cameraSelect.value = devices.some(d => d.deviceId === active) ? active : ''
+      const active =
+        cameraStream?.getVideoTracks()[0]?.getSettings()?.deviceId || ''
+      cameraSelect.value = devices.some(d => d.deviceId === active)
+        ? active
+        : ''
       if (devices.length > 1) {
-        console.log('選べるカメラ:', devices.map(d => d.label || '(名前なし)'))
+        console.log(
+          '選べるカメラ:',
+          devices.map(d => d.label || '(名前なし)')
+        )
       }
     } catch (error) {
       console.warn('カメラ一覧の取得に失敗:', error)
@@ -299,7 +349,8 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
   async function startCamera () {
     if (starting || cameraStream) return
     if (!navigator.mediaDevices?.getUserMedia) {
-      ocrStatus.textContent = 'このブラウザではカメラを利用できません。HTTPSで開いてください。'
+      ocrStatus.textContent =
+        'このブラウザではカメラを利用できません。HTTPSで開いてください。'
       return
     }
     const myStartup = ++startupSession
@@ -321,7 +372,10 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
     video.frameRate = { ideal: 30 }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video, audio: false })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video,
+        audio: false
+      })
       if (myStartup !== startupSession) {
         stream.getTracks().forEach(track => track.stop())
         return
@@ -329,19 +383,36 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
       cameraStream = stream
       cameraVideo.srcObject = stream
       cameraArea.hidden = false
-      try { await cameraVideo.play() } catch (error) { console.warn('自動再生の確認:', error) }
+      try {
+        await cameraVideo.play()
+      } catch (error) {
+        console.warn('自動再生の確認:', error)
+      }
       if (myStartup !== startupSession) return
 
       const track = stream.getVideoTracks()[0]
       const settings = track?.getSettings?.() || {}
       const capabilities = track?.getCapabilities?.() || {}
-      console.log('映像設定:', { width: settings.width, height: settings.height, focusMode: settings.focusMode })
-      ocrStatus.textContent = `カメラ映像: ${settings.width || '?'}×${settings.height || '?'} / ピントは端末側の自動調整を使用`
+      console.log('映像設定:', {
+        width: settings.width,
+        height: settings.height,
+        focusMode: settings.focusMode
+      })
+      ocrStatus.textContent = `カメラ映像: ${settings.width || '?'}×${
+        settings.height || '?'
+      } / ピントは端末側の自動調整を使用`
 
-      const focusModes = Array.isArray(capabilities.focusMode) ? capabilities.focusMode : []
+      const focusModes = Array.isArray(capabilities.focusMode)
+        ? capabilities.focusMode
+        : []
       if (focusModes.includes('continuous')) {
-        try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }) }
-        catch (error) { console.warn('オートフォーカス設定は利用できません:', error) }
+        try {
+          await track.applyConstraints({
+            advanced: [{ focusMode: 'continuous' }]
+          })
+        } catch (error) {
+          console.warn('オートフォーカス設定は利用できません:', error)
+        }
       }
       if (myStartup !== startupSession) return
       // single-shot 非対応時は手動フォーカスUIを見せない。
@@ -364,8 +435,11 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
         zoomSlider.oninput = async () => {
           const value = Number(zoomSlider.value)
           zoomValue.textContent = value
-          try { await track.applyConstraints({ advanced: [{ zoom: value }] }) }
-          catch (error) { console.warn('ズーム変更不可:', error) }
+          try {
+            await track.applyConstraints({ advanced: [{ zoom: value }] })
+          } catch (error) {
+            console.warn('ズーム変更不可:', error)
+          }
         }
       } else {
         zoomControl.hidden = true
@@ -377,13 +451,16 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
       // ZXingによるJANコード認識は並行実行する。完了を待つとOCR開始が遅れる。
       void barcodeScanner.start(stream)
       const session = ++scanSession
-      setAutoStatus('約4秒後に自動読み取りを開始します。文字を赤枠に合わせてください。')
+      setAutoStatus(
+        '約4秒後に自動読み取りを開始します。文字を赤枠に合わせてください。'
+      )
       scheduleAutoScan(session, 4000)
     } catch (error) {
       if (myStartup !== startupSession) return
       console.error('カメラ起動エラー:', error)
       stopCamera()
-      ocrStatus.textContent = 'カメラを起動できませんでした。別のカメラを選ぶか、許可設定を確認してください。'
+      ocrStatus.textContent =
+        'カメラを起動できませんでした。別のカメラを選ぶか、許可設定を確認してください。'
     } finally {
       if (myStartup === startupSession) {
         starting = false
@@ -392,7 +469,9 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
     }
   }
 
-  startCameraButton.addEventListener('click', () => { void startCamera() })
+  startCameraButton.addEventListener('click', () => {
+    void startCamera()
+  })
   cameraSelect.addEventListener('change', () => {
     const newId = cameraSelect.value
     const active = !!cameraStream
@@ -434,7 +513,8 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
       showOcrDebugImage(ocrFile)
       onCapture(candidate.fullCanvas.toDataURL('image/jpeg', 0.9), ocrFile)
       ocrButton.disabled = false
-      ocrStatus.textContent = '手動撮影しました。「画像から読み取る」で確認できます。'
+      ocrStatus.textContent =
+        '手動撮影しました。「画像から読み取る」で確認できます。'
     } catch (error) {
       console.error('手動撮影エラー:', error)
       ocrStatus.textContent = '撮影に失敗しました。'
