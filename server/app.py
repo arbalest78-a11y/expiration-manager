@@ -1,129 +1,3 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from PIL import Image, ImageOps, ImageEnhance
-import pytesseract
-import re
-import calendar
-import os
-import time
-
-
-def normalize_ocr_text(text):
-    """OCRで誤読しやすい数字と区切り記号の表記を統一。"""
-    replacements = str.maketrans(
-        "０１２３４５６７８９．，／－", "0123456789.,/-"
-    )
-    text = text.translate(replacements).replace("。", ".")
-    # 印字されたピリオドがカンマとして認識されることがある
-    return re.sub(r"(?<=\d),(?=\d)", ".", text)
-
-
-def parse_expiry_date(text):
-    """OCR文字列から完全な日付（YYYY-MM-DD）を抽出。"""
-    text = re.sub(r"\s+", "", normalize_ocr_text(text))
-    patterns = [
-        (r"(?<!\d)(20\d{2})[./-](\d{1,2})[./-](\d{1,2})(?!\d)", False),
-        (r"(?<!\d)(20\d{2})年(\d{1,2})月(\d{1,2})日?", False),
-        (r"(?<!\d)(\d{2})[./-](\d{1,2})[./-](\d{1,2})(?!\d)", True),
-        (r"(?<!\d)(\d{2})(\d{2})[./-](\d{1,2})(?!\d)", True),
-    ]
-    for pattern, short_year in patterns:
-        for match in re.finditer(pattern, text):
-            year = int(match.group(1)) + (2000 if short_year else 0)
-            month = int(match.group(2))
-            day = int(match.group(3))
-            if not (1 <= month <= 12):
-                continue
-            if not (1 <= day <= calendar.monthrange(year, month)[1]):
-                continue
-            return f"{year:04d}-{month:02d}-{day:02d}"
-    return None
-
-
-def parse_expiry_month(text):
-    """年月の候補を抽出。日付を認識できない場合も、必ず入力前に人が確認する。"""
-    text = re.sub(r"\s+", "", normalize_ocr_text(text)).upper()
-    text = re.sub(r"^[|｜]+", "", text)
-
-    # 例: FE2027E4N（「年」「月」が英字に誤認識）
-    ocr_month = re.fullmatch(r"(?:FE)?(20\d{2})E(0?[1-9]|1[0-2])N", text)
-    if ocr_month:
-        return f"{int(ocr_month.group(1)):04d}-{int(ocr_month.group(2)):02d}"
-
-    # 例: 2026.09.／2026,09／余計な印字2026.09.20
-    # 文字列全体ではなく、境界がある年月部分を抽出する
-    normal = re.search(
-        r"(?<!\d)(20\d{2}|\d{2})[./年-](0?[1-9]|1[0-2])(?!\d)",
-        text,
-    )
-    if normal:
-        year_str, month_str = normal.groups()
-    else:
-        # 年/月の漢字が数字になってしまった過去のケース（誤検出防止のため全体一致）
-        ocr_text = text[1:] if text.startswith("B") else text
-        patterns = [
-            r"(20\d{2})(0[1-9]|1[0-2])[019]?",
-            r"(20\d{2})8(0[1-9]|1[0-2])1?",
-            r"(20\d{2})8([1-9])5",
-        ]
-        match = next(
-            (m for pattern in patterns if (m := re.fullmatch(pattern, ocr_text))),
-            None,
-        )
-        if not match:
-            return None
-        year_str, month_str = match.groups()
-
-    year = int(year_str)
-    if year < 100:
-        year += 2000
-    return f"{year:04d}-{int(month_str):02d}"
-
-
-def parse_expiry_month_fuzzy(text):
-    """年月専用の広い切り抜きから「年→8」の誤認識を候補として抽出する。
-
-    例: 202681 1 A+ -> 2026-11
-    曖昧な1桁月は誤判定しやすいため、この補正では扱わない。
-    この候補を返しても、ブラウザでユーザーの確認が必要。
-    """
-    normalized = re.sub(r"\s+", "", normalize_ocr_text(text)).upper()
-    match = re.search(r"(?<!\d)(20\d{2})8(0[1-9]|1[0-2])(?=\D|$)", normalized)
-    if not match:
-        return None
-    return f"{int(match.group(1)):04d}-{int(match.group(2)):02d}"
-
-
-app = Flask(__name__)
-CORS(app)
-
-# Windows ではローカルの Tesseract を使用。Render では PATH の tesseract を利用。
-if os.name == "nt":
-    pytesseract.pytesseract.tesseract_cmd = (
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    )
-
-
-@app.route("/ocr", methods=["POST"])
-def ocr():
-    if "image" not in request.files:
-        return jsonify({"error": "画像がありません"}), 400
-
-    image_file = request.files["image"]
-    start_time = time.perf_counter()
-    print("受信した画像:", image_file.filename)
-
-    try:
-        image = Image.open(image_file.stream).convert("RGB")
-        original_width, original_height = image.size
-
-        # 画像全体は従来通りの前処理を行う
-        enlarged = image.resize(
-            (original_width * 3, original_height * 3), Image.Resampling.LANCZOS
-        )
-        gray = ImageOps.autocontrast(ImageOps.grayscale(enlarged))
-        soft = ImageEnhance.Contrast(gray).enhance(1.3)
-        soft = ImageEnhance.Sharpness(soft).enhance(1.2)
 
         width, height = soft.size
         center = soft.crop(
@@ -185,9 +59,13 @@ def ocr():
                 # 必ず年月日を先に解析。失敗時のみ年月候補として扱う
                 expiry_candidate = parse_expiry_date(recognized_text)
                 if expiry_candidate:
-                    date_counts[expiry_candidate] = (
-                        date_counts.get(expiry_candidate, 0) + 1
-                    )
+                    if is_plausible_expiry(expiry_candidate):
+                        date_counts[expiry_candidate] = (
+                            date_counts.get(expiry_candidate, 0) + 1
+                        )
+                    else:
+                        print("範囲外の日付候補を除外:", expiry_candidate, flush=True)
+                    # 範囲外でも、年月候補に格下げせず次の認識結果へ。
                     continue
 
                 month_candidate = parse_expiry_month(recognized_text)
@@ -198,9 +76,12 @@ def ocr():
                     if month_candidate:
                         print("年月の要確認候補 [wide]:", month_candidate, flush=True)
                 if month_candidate:
-                    month_counts[month_candidate] = (
-                        month_counts.get(month_candidate, 0) + 1
-                    )
+                    if is_plausible_expiry(month_candidate, month_only=True):
+                        month_counts[month_candidate] = (
+                            month_counts.get(month_candidate, 0) + 1
+                        )
+                    else:
+                        print("範囲外の年月候補を除外:", month_candidate, flush=True)
 
         expiry = None
         expiry_month = None
