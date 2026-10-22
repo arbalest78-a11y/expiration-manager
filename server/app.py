@@ -11,9 +11,7 @@ from datetime import date
 
 def normalize_ocr_text(text):
     """OCRで誤読しやすい数字と区切り記号の表記を統一。"""
-    replacements = str.maketrans(
-        "０１２３４５６７８９．，／－", "0123456789.,/-"
-    )
+    replacements = str.maketrans("０１２３４５６７８９．，／－", "0123456789.,/-")
     text = text.translate(replacements).replace("。", ".")
     # 印字されたピリオドがカンマとして認識されることがある
     return re.sub(r"(?<=\d),(?=\d)", ".", text)
@@ -30,7 +28,7 @@ def is_plausible_expiry(value, month_only=False):
     """
     try:
         if month_only:
-            year, month = map(int, value.split('-'))
+            year, month = map(int, value.split("-"))
             candidate = date(year, month, calendar.monthrange(year, month)[1])
         else:
             candidate = date.fromisoformat(value)
@@ -161,34 +159,56 @@ def ocr():
 
         width, height = soft.size
         center = soft.crop(
-            (int(width * 0.08), int(height * 0.18),
-             int(width * 0.92), int(height * 0.82))
+            (
+                int(width * 0.08),
+                int(height * 0.18),
+                int(width * 0.92),
+                int(height * 0.82),
+            )
         )
 
         # ドット印字は拡大・強調で逆に読みにくくなる場合があるため、
         # 元画像の左寄り中央帯（年月部分）も別途OCRにかける。
         # ※年月は確定日付ではないので、フロント側での確認が必須。
         original_gray = ImageOps.grayscale(image)
+        # 年月部分を広めに切り抜く
         year_month_area = original_gray.crop(
-            (int(original_width * 0.10), int(original_height * 0.25),
-             int(original_width * 0.75), int(original_height * 0.75))
+            (
+                int(original_width * 0.10),
+                int(original_height * 0.25),
+                int(original_width * 0.95),
+                int(original_height * 0.75),
+            )
         )
 
-        # ボトルの曲面印字では上下を狭く切ると文字が欠けやすい。
-        # 広めの領域を元画像から切り出し、文字種の制限なしで1行OCRする。
-        # 「2026年11月+C」など、右側に別の印字が続くケースも想定。
+        # 年月の印字全体を確認するための広い切り抜き
         year_month_wide = original_gray.crop(
-            (int(original_width * 0.05), int(original_height * 0.05),
-             int(original_width * 0.78), int(original_height * 0.90))
+            (
+                int(original_width * 0.05),
+                int(original_height * 0.05),
+                int(original_width * 0.95),
+                int(original_height * 0.90),
+            )
         )
 
         image_variants = [
             ("trim-medium", center, (7, 8), "jpn+eng", ""),
-            ("trim-binary", center.point(lambda p: 0 if p < 150 else 255),
-             (7, 8), "jpn+eng", ""),
-            ("yearmonth-left", year_month_area, (8,), "eng",
-             " -c tessedit_char_whitelist=0123456789.,/-"),
-            ("yearmonth-wide", year_month_wide, (7,), "eng", ""),
+            (
+                "trim-binary",
+                center.point(lambda p: 0 if p < 150 else 255),
+                (7, 8),
+                "jpn+eng",
+                "",
+            ),
+            (
+                "yearmonth-left",
+                year_month_area,
+                (8,),
+                "eng",
+                " -c tessedit_char_whitelist=0123456789.,/-",
+            ),
+            #("yearmonth-wide", year_month_wide, (7,), "eng", ""),
+            ("yearmonth-wide", year_month_wide, (8,), "jpn+eng", ""),
         ]
 
         date_counts = {}
