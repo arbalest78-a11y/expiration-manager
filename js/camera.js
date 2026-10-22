@@ -292,6 +292,118 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
     }
   }
 
+  // AF対応の背面カメラを優先する
+  function getAutofocusScore (track) {
+    let modes = []
+    try {
+      const capabilities = track?.getCapabilities?.() || {}
+      modes = Array.isArray(capabilities.focusMode)
+        ? capabilities.focusMode
+        : []
+    } catch (error) {
+      console.warn('AF対応情報を取得できません:', error)
+    }
+
+    if (modes.includes('continuous') && modes.includes('single-shot')) return 3
+    if (modes.includes('continuous')) return 2
+    if (modes.includes('single-shot')) return 1
+    return 0
+  }
+
+  function getVideoConstraints (deviceId = '') {
+    return {
+      ...(deviceId
+        ? { deviceId: { exact: deviceId } }
+        : { facingMode: { ideal: 'environment' } }),
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 }
+    }
+  }
+
+  async function selectAutofocusCamera (initialStream, myStartup) {
+    if (!navigator.mediaDevices.enumerateDevices) return initialStream
+
+    const initialTrack = initialStream.getVideoTracks()[0]
+    const initialDeviceId = initialTrack?.getSettings?.().deviceId || ''
+    let bestDeviceId = initialDeviceId
+    let bestScore = getAutofocusScore(initialTrack)
+
+    if (bestScore === 3) return initialStream
+
+    let rearCameras
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+
+      rearCameras = devices.filter(
+        device =>
+          device.kind === 'videoinput' &&
+          device.deviceId &&
+          (/\b(back|rear|environment)\b/i.test(device.label) ||
+            /背面|アウトカメラ/.test(device.label))
+      )
+    } catch (error) {
+      console.warn('カメラ一覧を取得できません:', error)
+      return initialStream
+    }
+
+    const candidates = rearCameras.filter(
+      device => device.deviceId !== initialDeviceId
+    )
+    if (!candidates.length) return initialStream
+
+    setAutoStatus('AF対応の背面カメラを確認中です…')
+
+    // 複数のカメラを同時に開かないようにする
+    initialStream.getTracks().forEach(track => track.stop())
+
+    for (const device of candidates) {
+      if (myStartup !== startupSession) return null
+
+      let probeStream = null
+      try {
+        probeStream = await navigator.mediaDevices.getUserMedia({
+          video: getVideoConstraints(device.deviceId),
+          audio: false
+        })
+
+        if (myStartup !== startupSession) return null
+
+        const score = getAutofocusScore(probeStream.getVideoTracks()[0])
+
+        console.log('背面カメラのAF判定:', device.label, score)
+
+        if (score > bestScore) {
+          bestScore = score
+          bestDeviceId = device.deviceId
+        }
+      } catch (error) {
+        console.warn('カメラの確認をスキップ:', device.label, error)
+      } finally {
+        probeStream?.getTracks().forEach(track => track.stop())
+      }
+
+      if (bestScore === 3) break
+    }
+
+    if (myStartup !== startupSession) return null
+
+    console.log('自動選択するカメラ:', bestDeviceId, 'AFスコア:', bestScore)
+
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: getVideoConstraints(bestDeviceId),
+        audio: false
+      })
+    } catch (error) {
+      console.warn('AF対応カメラを起動できません:', error)
+      return navigator.mediaDevices.getUserMedia({
+        video: getVideoConstraints(),
+        audio: false
+      })
+    }
+  }
+
   async function updateCameraChoices () {
     if (!navigator.mediaDevices.enumerateDevices) return
     try {
@@ -364,22 +476,28 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
     focusButton.hidden = true
     focusStatus.hidden = true
 
-    const video = selectedCameraId
-      ? { deviceId: { exact: selectedCameraId } }
-      : { facingMode: { ideal: 'environment' } }
-    video.width = { ideal: 1920 }
-    video.height = { ideal: 1080 }
-    video.frameRate = { ideal: 30 }
-
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video,
+      let stream = await navigator.mediaDevices.getUserMedia({
+        video: getVideoConstraints(selectedCameraId),
         audio: false
       })
+
       if (myStartup !== startupSession) {
         stream.getTracks().forEach(track => track.stop())
         return
       }
+
+      // 自動選択の場合だけAF対応カメラを探す
+      if (!selectedCameraId) {
+        stream = await selectAutofocusCamera(stream, myStartup)
+        if (!stream) return
+      }
+
+      if (myStartup !== startupSession) {
+        stream.getTracks().forEach(track => track.stop())
+        return
+      }
+
       cameraStream = stream
       cameraVideo.srcObject = stream
       cameraArea.hidden = false
