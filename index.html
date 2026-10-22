@@ -62,11 +62,7 @@
               <label for="itemImage">
                 商品写真 <span class="optional">任意</span>
               </label>
-              <input
-                type="file"
-                id="itemImage"
-                accept="image/*"
-              />
+              <input type="file" id="itemImage" accept="image/*" />
 
               <div id="cameraSelectRow" class="camera-select-row" hidden>
                 <label for="cameraSelect">使用するカメラ</label>
@@ -85,8 +81,16 @@
                 <p class="camera-guide-instruction">
                   赤枠に賞味期限を合わせてください。自動で鮮明なフレームを選び、読み取ります。
                 </p>
-                <button type="button" id="focusButton" disabled>ピントを合わせる</button>
-                <p id="focusStatus" class="camera-focus-status" role="status" aria-live="polite"></p>
+                <button type="button" id="focusButton" disabled>
+                  ピントを合わせる
+                </button>
+                <p
+                  id="focusStatus"
+                  class="camera-focus-status"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <!--
                 <div id="zoomControl" hidden>
                   <label for="zoomSlider">
                     ズーム：<span id="zoomValue">1</span>倍
@@ -101,9 +105,14 @@
                   />
                 </div>
 
-                <p id="autoScanStatus" role="status" aria-live="polite">カメラを起動すると自動読み取りを始めます。</p>
+                <p id="autoScanStatus" role="status" aria-live="polite">
+                  カメラを起動すると自動読み取りを始めます。
+                </p>
+              -->
 
-                <button type="button" id="captureButton">手動で撮影（予備）</button>
+                <button type="button" id="captureButton">
+                  手動で撮影（予備）
+                </button>
 
                 <button type="button" id="stopCameraButton">
                   カメラを閉じる
