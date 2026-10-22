@@ -207,8 +207,8 @@ def ocr():
                 "eng",
                 " -c tessedit_char_whitelist=0123456789.,/-",
             ),
-            #("yearmonth-wide", year_month_wide, (7,), "eng", ""),
-            ("yearmonth-wide", year_month_wide, (8,), "jpn+eng", ""),
+            ("yearmonth-wide", year_month_wide, (7,), "eng", ""),
+            #("yearmonth-wide", year_month_wide, (8,), "jpn+eng", ""),
         ]
 
         date_counts = {}
