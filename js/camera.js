@@ -405,23 +405,52 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
       const focusModes = Array.isArray(capabilities.focusMode)
         ? capabilities.focusMode
         : []
+
+      console.log('ピント対応モード:', focusModes)
+      console.log('カメラの対応機能:', capabilities)
+
+      // 連続オートフォーカスの設定
+      let focusMessage = ''
+
       if (focusModes.includes('continuous')) {
         try {
           await track.applyConstraints({
             advanced: [{ focusMode: 'continuous' }]
           })
+
+          const appliedMode = track.getSettings().focusMode
+
+          focusMessage =
+            appliedMode === 'continuous'
+              ? '連続AF：設定済み'
+              : appliedMode
+              ? `連続AF：要求済み（現在：${appliedMode}）`
+              : '連続AF：要求済み（反映状態不明）'
         } catch (error) {
-          console.warn('オートフォーカス設定は利用できません:', error)
+          console.warn('オートフォーカス設定エラー:', error)
+          focusMessage = '連続AF：設定失敗'
         }
+      } else {
+        focusMessage = focusModes.length
+          ? '連続AF：非対応'
+          : 'AF対応情報を取得できません'
       }
+
       if (myStartup !== startupSession) return
-      // single-shot 非対応時は手動フォーカスUIを見せない。
-      if (focusModes.includes('single-shot')) {
-        focusButton.hidden = false
-        focusButton.disabled = false
-        focusStatus.hidden = false
-        focusStatus.textContent = 'ぼやける場合はピントボタンを試せます。'
-      }
+
+      // 単発AFへの対応状況を確認
+      const singleShotAvailable = focusModes.includes('single-shot')
+
+      // 対応状況を画面に表示する
+      focusStatus.hidden = false
+
+      focusStatus.textContent = singleShotAvailable
+        ? `${focusMessage}。ぼやける場合はピントボタンを押してください。`
+        : `${focusMessage}。少し距離を離すか、別の背面カメラを試してください。`
+
+      // 単発AF対応端末のみボタンを表示
+      focusButton.hidden = !singleShotAvailable
+      focusButton.disabled = !singleShotAvailable
 
       if (capabilities.zoom) {
         const zoom = capabilities.zoom
@@ -482,17 +511,57 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
 
   focusButton.addEventListener('click', async () => {
     const track = cameraStream?.getVideoTracks()[0]
-    if (!track) return
+
+    if (!track || track.readyState !== 'live') return
+
     const modes = track.getCapabilities?.().focusMode || []
-    if (!Array.isArray(modes) || !modes.includes('single-shot')) return
+
+    if (!Array.isArray(modes) || !modes.includes('single-shot')) {
+      focusStatus.textContent = 'このカメラでは単発AFを利用できません。'
+      return
+    }
+
     focusButton.disabled = true
+    focusStatus.textContent = 'ピント合わせを要求しています…'
+
     try {
-      await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] })
-      focusStatus.textContent = 'ピント合わせを要求しました。'
+      // 必要に応じて連続AFへ戻す
+      if (
+        track.getSettings().focusMode === 'single-shot' &&
+        modes.includes('continuous')
+      ) {
+        await track.applyConstraints({
+          advanced: [{ focusMode: 'continuous' }]
+        })
+      }
+
+      // 単発AFを要求
+      await track.applyConstraints({
+        advanced: [{ focusMode: 'single-shot' }]
+      })
+
+      if (cameraStream?.getVideoTracks()[0] !== track) return
+
+      const appliedMode = track.getSettings().focusMode
+
+      focusStatus.textContent =
+        appliedMode === 'single-shot'
+          ? '単発AFを設定しました。文字が鮮明になったか確認してください。'
+          : '単発AFを要求しました。反映状態は未確認です。'
     } catch (error) {
-      focusStatus.textContent = '手動ピント合わせは使えませんでした。'
+      console.warn('手動ピント合わせエラー:', error)
+
+      if (cameraStream?.getVideoTracks()[0] === track) {
+        focusStatus.textContent =
+          'ピント合わせに失敗しました。距離やカメラを変えてください。'
+      }
     } finally {
-      if (track.readyState === 'live') focusButton.disabled = false
+      if (
+        cameraStream?.getVideoTracks()[0] === track &&
+        track.readyState === 'live'
+      ) {
+        focusButton.disabled = false
+      }
     }
   })
 
