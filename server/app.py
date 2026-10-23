@@ -200,7 +200,10 @@ def ocr():
         date_image = ImageOps.autocontrast(date_image)
         date_image = ImageEnhance.Contrast(date_image).enhance(1.5)
 
-        # OCR実行パターン（6回から4回に変更）
+        # 白黒を反転した画像（比較用）
+        inverted = ImageOps.invert(center)
+
+        # OCR実行パターン（白黒反転を含む6回の比較テスト）
         image_variants = [
             (
                 "date-enhanced",
@@ -210,6 +213,7 @@ def ocr():
                 " -c tessedit_char_whitelist=0123456789./-",
             ),
             ("trim-medium", center, (8,), "jpn+eng", ""),
+            ("trim-inverted", inverted, (7, 8), "eng", ""),
             (
                 "yearmonth-left",
                 year_month_area,
