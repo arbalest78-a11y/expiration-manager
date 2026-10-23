@@ -74,7 +74,7 @@ def parse_expiry_month(text):
     # 日の部分が不正でも、月末日として誤入力させないため。
     if re.search(r"(?<!\d)(?:20\d{2}|\d{2})[./-](?:0?[1-9]|1[0-2])[./-](?=.)", text):
         return None
-    if re.search(r"(?<!\d)20\d{2}年(?:0?[1-9]|1[0-2])月(?=.)", text):
+    if re.search(r"(?<!\d)20\d{2}年(?:0?[1-9]|1[0-2])月(?=\d)", text):
         return None
 
     # 例: FE2027E4N（「年」「月」が英字に誤認識）
