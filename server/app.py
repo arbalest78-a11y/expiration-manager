@@ -191,15 +191,25 @@ def ocr():
             )
         )
 
+        # 日付用の画像処理を追加（比較用）
+        date_image = ImageOps.grayscale(image)
+        date_image = date_image.resize(
+            (original_width * 3, original_height * 3),
+            Image.Resampling.LANCZOS,
+        )
+        date_image = ImageOps.autocontrast(date_image)
+        date_image = ImageEnhance.Contrast(date_image).enhance(1.5)
+
+        # OCR実行パターン（6回から4回に変更）
         image_variants = [
-            ("trim-medium", center, (7, 8), "jpn+eng", ""),
             (
-                "trim-binary",
-                center.point(lambda p: 0 if p < 150 else 255),
-                (7, 8),
-                "jpn+eng",
-                "",
+                "date-enhanced",
+                date_image,
+                (7,),
+                "eng",
+                " -c tessedit_char_whitelist=0123456789./-",
             ),
+            ("trim-medium", center, (8,), "jpn+eng", ""),
             (
                 "yearmonth-left",
                 year_month_area,
@@ -207,7 +217,6 @@ def ocr():
                 "eng",
                 " -c tessedit_char_whitelist=0123456789.,/-",
             ),
-            #("yearmonth-wide", year_month_wide, (7,), "eng", ""),
             ("yearmonth-wide", year_month_wide, (8,), "jpn+eng", ""),
         ]
 
