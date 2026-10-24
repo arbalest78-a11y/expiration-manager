@@ -16,6 +16,7 @@ import {
 
 import { setupCamera } from './camera.js'
 import { setupOcr } from './ocr-handler.js'
+import { setupBarcodeScanner } from './barcode.js'
 
 import {
   addButton,
@@ -98,6 +99,25 @@ const cameraController = setupCamera({
 
   onAutoResult: ocrController.handleAutomaticResult
 })
+
+const barcodeController = setupBarcodeScanner({
+  onStart: function () {
+    cameraController.stop()
+  },
+
+  onDetected: function (code) {
+    cancelJanLookup()
+    janCodeInput.value = code
+    lookupJanButton.click()
+  }
+})
+
+// 賞味期限OCRのカメラを使うときはバーコード読取を終了
+document
+  .getElementById('startCameraButton')
+  .addEventListener('click', function () {
+    barcodeController.stop()
+  })
 
 // =========================
 // イベント
@@ -308,6 +328,7 @@ removeImageButton.addEventListener('click', function () {
 
 // 商品登録フォームを表示
 addButton.addEventListener('click', function () {
+  barcodeController.stop()
   cameraController.stop()
   editingId = null
   selectedImage = ''
@@ -325,6 +346,7 @@ addButton.addEventListener('click', function () {
 
 // キャンセル
 cancelButton.addEventListener('click', function () {
+  barcodeController.stop()
   cameraController.stop()
   editingId = null
   selectedImage = ''
@@ -342,6 +364,7 @@ cancelButton.addEventListener('click', function () {
 
 // 保存
 itemForm.addEventListener('submit', function (event) {
+  barcodeController.stop()
   event.preventDefault()
   cameraController.stop()
 
@@ -480,6 +503,7 @@ importFile.addEventListener('change', async function () {
 // =========================
 
 function openEditForm (item) {
+  barcodeController.stop()
   editingId = item.id
   selectedImage = item.image || ''
   ocrFile = null
