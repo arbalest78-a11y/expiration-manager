@@ -38,6 +38,25 @@
               </label>
               <input type="text" id="itemName" required />
 
+              <!-- JANコードから商品名を取得 -->
+              <label for="janCode">
+                JANコード <span class="optional">任意</span>
+              </label>
+
+              <input
+                type="text"
+                id="janCode"
+                inputmode="numeric"
+                maxlength="13"
+                placeholder="8桁または13桁のJANコード"
+              />
+
+              <button type="button" id="lookupJanButton">
+                JANコードから商品名を取得
+              </button>
+
+              <p id="janSearchStatus" role="status" aria-live="polite"></p>
+
               <label for="expiryDate">
                 賞味期限 <span class="required">必須</span>
               </label>
