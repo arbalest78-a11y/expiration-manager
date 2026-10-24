@@ -7,6 +7,10 @@ import calendar
 import os
 import time
 from datetime import date
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+import json
 
 
 def normalize_ocr_text(text):
@@ -134,6 +138,42 @@ if os.name == "nt":
     pytesseract.pytesseract.tesseract_cmd = (
         r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     )
+
+
+@app.route("/product/<jan_code>", methods=["GET"])
+def get_product(jan_code):
+    # JANコードの形式確認
+    if not jan_code.isdigit() or len(jan_code) not in (8, 13):
+        return jsonify({"error": "JANコードは8桁または13桁で入力してください"}), 400
+
+    params = urlencode({"fields": "product_name,brands,image_front_url"})
+    url = f"https://world.openfoodfacts.org/api/v2/product/" f"{jan_code}?{params}"
+
+    headers = {"User-Agent": os.environ["OFF_USER_AGENT"]}
+
+    try:
+        req = Request(url, headers=headers)
+
+        with urlopen(req, timeout=10) as response:
+            data = json.load(response)
+
+        if data.get("status") != 1:
+            return jsonify({"error": "商品が見つかりませんでした"}), 404
+
+        product = data.get("product", {})
+
+        return jsonify(
+            {
+                "jan_code": jan_code,
+                "name": product.get("product_name", ""),
+                "brand": product.get("brands", ""),
+                "image_url": product.get("image_front_url", ""),
+            }
+        )
+
+    except (HTTPError, URLError, TimeoutError) as error:
+        print("商品検索APIエラー:", error)
+        return jsonify({"error": "商品情報の取得に失敗しました"}), 502
 
 
 @app.route("/ocr", methods=["POST"])

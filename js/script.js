@@ -46,6 +46,17 @@ import {
   importFile
 } from './dom.js'
 
+// JANコード検索APIの接続先
+const PRODUCT_API_BASE_URL =
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1'
+    ? 'http://127.0.0.1:5000'
+    : 'https://YOUR-RENDER-SERVICE.onrender.com'
+
+// JANコード検索用のHTML要素
+const janCodeInput = document.getElementById('janCode')
+const lookupJanButton = document.getElementById('lookupJanButton')
+const janSearchStatus = document.getElementById('janSearchStatus')
 
 // =========================
 // データ
@@ -88,10 +99,100 @@ const cameraController = setupCamera({
   onAutoResult: ocrController.handleAutomaticResult
 })
 
-
 // =========================
 // イベント
 // =========================
+
+// =========================
+// JANコードから商品情報を取得
+// =========================
+
+let janLookupAbortController = null
+
+function cancelJanLookup () {
+  if (janLookupAbortController) {
+    janLookupAbortController.abort()
+    janLookupAbortController = null
+  }
+  lookupJanButton.disabled = false
+}
+
+lookupJanButton.addEventListener('click', async function () {
+  const janCode = janCodeInput.value.trim()
+
+  // JANコードの入力チェック
+  if (!/^(?:\d{8}|\d{13})$/.test(janCode)) {
+    janSearchStatus.textContent =
+      'JANコードは半角数字の8桁または13桁で入力してください。'
+    return
+  }
+
+  if (PRODUCT_API_BASE_URL.includes('YOUR-RENDER-SERVICE')) {
+    janSearchStatus.textContent = 'RenderのURLを設定してください。'
+    return
+  }
+
+  cancelJanLookup()
+
+  const controller = new AbortController()
+  janLookupAbortController = controller
+
+  lookupJanButton.disabled = true
+  janSearchStatus.textContent = '商品情報を検索しています…'
+
+  try {
+    const response = await fetch(
+      `${PRODUCT_API_BASE_URL}/product/${encodeURIComponent(janCode)}`,
+      { signal: controller.signal }
+    )
+
+    const result = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(
+        result.error ||
+          `商品情報を取得できませんでした（HTTP ${response.status}）。`
+      )
+    }
+
+    // 検索中にフォームを閉じたり、JANコードが変わった場合
+    if (controller.signal.aborted || janCodeInput.value.trim() !== janCode) {
+      return
+    }
+
+    const productName = (result.name || '').trim()
+
+    if (!productName) {
+      janSearchStatus.textContent =
+        '商品名が登録されていません。手動で入力してください。'
+      return
+    }
+
+    // 入力済みの商品名を上書きする場合は確認する
+    if (
+      itemName.value.trim() &&
+      itemName.value.trim() !== productName &&
+      !confirm('入力済みの商品名を変更しますか？')
+    ) {
+      janSearchStatus.textContent = '商品名は変更せず、そのまま残しました。'
+      return
+    }
+
+    // 商品名を入力欄へ反映
+    itemName.value = productName
+
+    janSearchStatus.textContent = `商品名「${productName}」を入力しました。`
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      janSearchStatus.textContent = `商品検索に失敗しました：${error.message}`
+    }
+  } finally {
+    if (janLookupAbortController === controller) {
+      janLookupAbortController = null
+      lookupJanButton.disabled = false
+    }
+  }
+})
 
 // 商品名検索
 searchInput.addEventListener('input', function () {
@@ -185,7 +286,11 @@ addButton.addEventListener('click', function () {
   ocrButton.disabled = true
   ocrStatus.textContent = ''
 
+  cancelJanLookup()
   openRegistrationForm()
+
+  janCodeInput.value = ''
+  janSearchStatus.textContent = ''
 })
 
 // キャンセル
@@ -197,6 +302,10 @@ cancelButton.addEventListener('click', function () {
 
   ocrButton.disabled = true
   ocrStatus.textContent = ''
+
+  cancelJanLookup()
+  janCodeInput.value = ''
+  janSearchStatus.textContent = ''
 
   closeForm()
 })
@@ -212,6 +321,7 @@ itemForm.addEventListener('submit', function (event) {
     const item = {
       id: Date.now(),
       name: itemName.value,
+      jan_code: janCodeInput.value.trim(),
       expiry: expiryDate.value,
       quantity: quantity.value,
       storage: storage.value,
@@ -227,6 +337,7 @@ itemForm.addEventListener('submit', function (event) {
 
     if (item) {
       item.name = itemName.value
+      item.jan_code = janCodeInput.value.trim()
       item.expiry = expiryDate.value
       item.quantity = quantity.value
       item.storage = storage.value
@@ -242,6 +353,10 @@ itemForm.addEventListener('submit', function (event) {
   editingId = null
   selectedImage = ''
   ocrFile = null
+
+  cancelJanLookup()
+  janCodeInput.value = ''
+  janSearchStatus.textContent = ''
 
   closeForm()
 })
@@ -339,7 +454,11 @@ function openEditForm (item) {
   selectedImage = item.image || ''
   ocrFile = null
 
+  cancelJanLookup()
   openEditFormUI(item)
+
+  janCodeInput.value = item.jan_code || ''
+  janSearchStatus.textContent = ''
 }
 
 function deleteItem (item) {
