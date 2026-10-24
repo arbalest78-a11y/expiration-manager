@@ -53,7 +53,6 @@ const PRODUCT_API_BASE_URL =
     ? 'http://127.0.0.1:5000'
     : 'https://expiration-manager.onrender.com'
 
-
 // JANコード検索用のHTML要素
 const janCodeInput = document.getElementById('janCode')
 const lookupJanButton = document.getElementById('lookupJanButton')
@@ -182,7 +181,37 @@ lookupJanButton.addEventListener('click', async function () {
     // 商品名を入力欄へ反映
     itemName.value = productName
 
-    janSearchStatus.textContent = `商品名「${productName}」を入力しました。`
+    // APIから商品画像のURLを取得
+    const imageUrl =
+      typeof result.image_url === 'string' ? result.image_url.trim() : ''
+
+    let imageMessage = '商品画像は見つかりませんでした。'
+
+    if (imageUrl.startsWith('https://')) {
+      // すでに写真がある場合は上書きを確認する
+      const useApiImage =
+        !selectedImage || confirm('現在の写真を商品画像に置き換えますか？')
+
+      if (useApiImage) {
+        // APIから取得した画像を設定
+        selectedImage = imageUrl
+
+        // 商品写真のプレビューを更新
+        showImagePreview(selectedImage)
+
+        // 以前の撮影画像やOCR情報をクリア
+        itemImage.value = ''
+        ocrFile = null
+        ocrButton.disabled = true
+        ocrStatus.textContent = ''
+
+        imageMessage = '商品画像も設定しました。'
+      } else {
+        imageMessage = '現在の写真を保持しました。'
+      }
+    }
+
+    janSearchStatus.textContent = `商品名「${productName}」を入力しました。${imageMessage}`
   } catch (error) {
     if (error.name !== 'AbortError') {
       janSearchStatus.textContent = `商品検索に失敗しました：${error.message}`
