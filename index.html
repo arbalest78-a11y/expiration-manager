@@ -57,6 +57,41 @@
 
               <p id="janSearchStatus" role="status" aria-live="polite"></p>
 
+              <button type="button" id="startBarcodeButton">
+                カメラでJANコードを読み取る
+              </button>
+
+              <div id="barcodeArea" hidden>
+                <div style="position: relative; max-width: 420px">
+                  <video
+                    id="barcodeVideo"
+                    autoplay
+                    muted
+                    playsinline
+                    style="display: block; width: 100%; border-radius: 8px"
+                  ></video>
+                  <div
+                    aria-hidden="true"
+                    style="
+                      position: absolute;
+                      left: 10%;
+                      top: 35%;
+                      width: 80%;
+                      height: 30%;
+                      box-sizing: border-box;
+                      border: 3px solid red;
+                      pointer-events: none;
+                    "
+                  ></div>
+                </div>
+
+                <button type="button" id="stopBarcodeButton">
+                  読み取りを中止
+                </button>
+              </div>
+
+              <p id="barcodeStatus" role="status" aria-live="polite"></p>
+
               <label for="expiryDate">
                 賞味期限 <span class="required">必須</span>
               </label>
