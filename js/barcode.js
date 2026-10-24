@@ -1,81 +1,52 @@
 
-export function setupBarcodeScanner({ onStart, onDetected }) {
-  const startButton = document.getElementById('startBarcodeButton')
-  const stopButton = document.getElementById('stopBarcodeButton')
-  const area = document.getElementById('barcodeArea')
-  const video = document.getElementById('barcodeVideo')
-  const status = document.getElementById('barcodeStatus')
-  let scanControls = null
-  let session = 0
+// JANコードの読み取り（ZXingを使用）
+// 読み取ったJANコードを商品名へ反映する機能はまだ未実装です。
+export function createBarcodeScanner (cameraVideo, ocrStatus) {
+  const janCodeReader = new ZXingBrowser.BrowserMultiFormatOneDReader()
+  let barcodeControls = null
+  let detectedJan = ''
+  let scanId = 0
 
-  function stop() {
-    session += 1
-    if (scanControls) {
-      scanControls.stop()
-      scanControls = null
-    }
-    if (video.srcObject) {
-      video.srcObject.getTracks().forEach(track => track.stop())
-      video.srcObject = null
-    }
-    area.hidden = true
-    startButton.disabled = false
-  }
-
-  startButton.addEventListener('click', async function () {
-    stop()
-    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-      status.textContent = 'カメラの利用にはHTTPS接続が必要です。'
-      return
-    }
-    if (!window.ZXingBrowser?.BrowserMultiFormatOneDReader) {
-      status.textContent = 'バーコード読み取りライブラリを読み込めませんでした。'
-      return
-    }
-
-    onStart()
-    const currentSession = ++session
-    startButton.disabled = true
-    area.hidden = false
-    status.textContent = 'カメラを起動しています…'
+  async function start (cameraStream) {
+    if (!cameraStream) return
+    const currentScan = ++scanId
+    detectedJan = ''
 
     try {
-      const reader = new window.ZXingBrowser.BrowserMultiFormatOneDReader()
-      const controls = await reader.decodeFromConstraints(
-        { audio: false, video: { facingMode: { ideal: 'environment' } } },
-        video,
-        (result, error, controls) => {
-          if (currentSession !== session || !result) return
-          const raw = result.getText().trim()
-          const code = /^\d{12}$/.test(raw) ? `0${raw}` : raw
-          if (!/^(?:\d{8}|\d{13})$/.test(code)) return
+      const controls = await janCodeReader.decodeFromStream(
+        cameraStream,
+        cameraVideo,
+        function (result) {
+          if (!result || currentScan !== scanId) return
 
-          controls.stop()
-          stop()
-          status.textContent = `JANコード ${code} を読み取りました。商品を検索します。`
-          onDetected(code)
+          const code = result.getText()
+          if (!/^(?:\d{8}|\d{13})$/.test(code)) return
+          if (detectedJan === code) return
+
+          detectedJan = code
+          console.log('JANコードを読み取りました:', detectedJan)
         }
       )
 
-      if (currentSession !== session) {
+      if (currentScan !== scanId) {
         controls.stop()
-      } else {
-        scanControls = controls
-        status.textContent = '赤枠にバーコードを合わせてください。'
+        return
       }
+      barcodeControls = controls
     } catch (error) {
-      if (currentSession !== session) return
-      stop()
-      status.textContent = error.name === 'NotAllowedError'
-        ? 'カメラへのアクセスを許可してください。'
-        : `カメラを起動できませんでした：${error.message}`
+      if (currentScan !== scanId) return
+      console.error('JANコード読み取りエラー:', error)
+      ocrStatus.textContent = 'JANコードの読み取りを開始できませんでした。'
     }
-  })
+  }
 
-  stopButton.addEventListener('click', function () {
-    stop()
-    status.textContent = '読み取りを中止しました。'
-  })
+  function stop () {
+    scanId++
+    if (barcodeControls) {
+      barcodeControls.stop()
+      barcodeControls = null
+    }
+  }
 
-  return { stop }
+  return { start, stop }
 }
