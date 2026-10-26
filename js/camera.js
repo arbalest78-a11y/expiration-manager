@@ -9,7 +9,6 @@ import {
   ocrStatus
 } from './dom.js'
 
-import { createBarcodeScanner } from './barcode.js'
 import { requestOcr } from './ocr-api.js'
 import { getVideoConstraints, selectAutofocusCamera } from './camera-af.js'
 
@@ -25,7 +24,6 @@ const cameraSelect = document.getElementById('cameraSelect')
 
 const AUTO_OCR_ENABLED = false
 
-const barcodeScanner = createBarcodeScanner(cameraVideo, ocrStatus)
 let cameraStream = null
 let selectedCameraId = ''
 
@@ -339,7 +337,6 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
     focusButton.disabled = true
     focusStatus.hidden = true
     zoomControl.hidden = true
-    barcodeScanner.stop()
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop())
       cameraStream = null
@@ -490,8 +487,6 @@ export function setupCamera ({ onCaptureStart, onCapture, onAutoResult }) {
       if (myStartup !== startupSession) return
 
       // ZXingによるJANコード認識は並行実行する。完了を待つとOCR開始が遅れる。
-
-      void barcodeScanner.start(stream)
 
       if (AUTO_OCR_ENABLED) {
         const session = ++scanSession
