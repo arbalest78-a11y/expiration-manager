@@ -56,6 +56,7 @@ def parse_expiry_date(text):
         (r"(?<!\d)(\d{2})[./-](\d{1,2})[./-](\d{1,2})(?![A-Za-z0-9])", True),
         (r"(?<!\d)(\d{2})(\d{2})[./-](\d{1,2})(?![A-Za-z0-9])", True),
     ]
+    candidates = []
     for pattern, short_year in patterns:
         for match in re.finditer(pattern, text):
             year = int(match.group(1)) + (2000 if short_year else 0)
@@ -65,8 +66,15 @@ def parse_expiry_date(text):
                 continue
             if not (1 <= day <= calendar.monthrange(year, month)[1]):
                 continue
-            return f"{year:04d}-{month:02d}-{day:02d}"
-    return None
+            candidates.append(f"{year:04d}-{month:02d}-{day:02d}")
+
+    if not candidates:
+        return None
+
+    # 文字列に複数日付がある場合、範囲内の候補を優先する。
+    # すべて範囲外なら元の候補を返し、呼び出し側で除外する。
+    # 年月候補に格下げしない従来の挙動は維持する。
+    return next((c for c in candidates if is_plausible_expiry(c)), candidates[0])
 
 
 def parse_expiry_month(text):
