@@ -13,8 +13,17 @@ export function setupBarcodeScanner({ onStart, onDetected }) {
   let scanControls = null
   let session = 0
   let selectedCameraId = ''
+  let guidanceTimer = null
+
+  function clearGuidanceTimer() {
+    if (guidanceTimer !== null) {
+      clearTimeout(guidanceTimer)
+      guidanceTimer = null
+    }
+  }
 
   function stop() {
+    clearGuidanceTimer()
     session += 1
     if (scanControls) {
       scanControls.stop()
@@ -100,6 +109,7 @@ export function setupBarcodeScanner({ onStart, onDetected }) {
 
   async function start() {
     stop()
+    status.textContent = '読み取りボタンを押しました。カメラと読み取り機能を確認しています…'
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       status.textContent = 'カメラの利用にはHTTPS接続が必要です。'
       return
@@ -130,7 +140,11 @@ export function setupBarcodeScanner({ onStart, onDetected }) {
           if (currentSession !== session || !result) return
           const raw = result.getText().trim()
           const code = /^\d{12}$/.test(raw) ? `0${raw}` : raw
-          if (!/^(?:\d{8}|\d{13})$/.test(code)) return
+          clearGuidanceTimer()
+          if (!/^(?:\d{8}|\d{13})$/.test(code)) {
+            status.textContent = `文字は認識しましたが、JANコードではありません（${raw}）。8桁または13桁のバーコードを映してください。`
+            return
+          }
 
           controls.stop()
           stop()
@@ -144,7 +158,12 @@ export function setupBarcodeScanner({ onStart, onDetected }) {
         return
       }
       scanControls = controls
-      status.textContent = '赤枠にバーコードを合わせてください。'
+      status.textContent = 'カメラの起動に成功しました。JANコードを赤枠内に水平に映してください。読み取り処理を実行中です。'
+      guidanceTimer = setTimeout(() => {
+        if (currentSession === session && video.srcObject) {
+          status.textContent = '読み取り処理は動作中ですが、まだJANコードを認識できていません。少し離して全体を映す・明るくする・カメラを切り替える、の順で試してください。'
+        }
+      }, 8000)
       await updateCameraChoices(currentSession)
       await setupFocus(currentSession)
     } catch (error) {
