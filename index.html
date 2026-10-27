@@ -62,6 +62,19 @@
               </button>
 
               <div id="barcodeArea" hidden>
+                <div
+                  id="barcodeCameraSelectRow"
+                  class="camera-select-row"
+                  hidden
+                >
+                  <label for="barcodeCameraSelect">
+                    使用するカメラ（JANコード）
+                  </label>
+                  <select id="barcodeCameraSelect">
+                    <option value="">自動（背面カメラ）</option>
+                  </select>
+                  <small>ぼやける場合は別の背面カメラを選んでください。</small>
+                </div>
                 <div style="position: relative; max-width: 420px">
                   <video
                     id="barcodeVideo"
@@ -85,6 +98,17 @@
                   ></div>
                 </div>
 
+                <button type="button" id="barcodeFocusButton" hidden disabled>
+                  ピントを合わせる
+                </button>
+
+                <p
+                  id="barcodeFocusStatus"
+                  class="camera-focus-status"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                ></p>
                 <button type="button" id="stopBarcodeButton">
                   読み取りを中止
                 </button>
