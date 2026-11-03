@@ -18,7 +18,7 @@ def normalize_ocr_text(text):
     replacements = str.maketrans("０１２３４５６７８９．，／－", "0123456789.,/-")
     text = text.translate(replacements).replace("。", ".")
     # 印字されたピリオドがカンマとして認識されることがある
-    return re.sub(r"(?<=\d),(?=\d)", ".", text)
+    return re.sub(r"(?<=\d),\s*(?=\d)", ".", text)
 
 
 # 賞味期限のOCR候補として採用する期間。必要に応じて変更可能。
@@ -46,35 +46,54 @@ def is_plausible_expiry(value, month_only=False):
     return today <= candidate <= latest
 
 
-def parse_expiry_date(text):
-    """OCR文字列から完全な日付（YYYY-MM-DD）を抽出。"""
-    # 前後の別の数字を日付と連結しないよう、空白・改行は残す。
-    text = normalize_ocr_text(text).strip()
-    patterns = [
-        (r"(?<!\d)(20\d{2})[./-](\d{1,2})[./-](\d{1,2})(?![A-Za-z0-9])", False),
-        (r"(?<!\d)(20\d{2})年(\d{1,2})月(\d{1,2})日?(?![A-Za-z0-9])", False),
-        (r"(?<!\d)(\d{2})[./-](\d{1,2})[./-](\d{1,2})(?![A-Za-z0-9])", True),
-        (r"(?<!\d)(\d{2})(\d{2})[./-](\d{1,2})(?![A-Za-z0-9])", True),
-    ]
-    candidates = []
-    for pattern, short_year in patterns:
-        for match in re.finditer(pattern, text):
-            year = int(match.group(1)) + (2000 if short_year else 0)
-            month = int(match.group(2))
-            day = int(match.group(3))
-            if not (1 <= month <= 12):
-                continue
-            if not (1 <= day <= calendar.monthrange(year, month)[1]):
-                continue
-            candidates.append(f"{year:04d}-{month:02d}-{day:02d}")
-
-    if not candidates:
+def _date_from_parts(year_text, month_text, day_text):
+    """年月日の数字をカレンダー上の妥当な日付に変換する。"""
+    try:
+        year = int(year_text)
+        if year < 100:
+            year += 2000
+        candidate = date(year, int(month_text), int(day_text)).isoformat()
+    except ValueError:
         return None
+    return candidate if is_plausible_expiry(candidate) else None
 
-    # 文字列に複数日付がある場合、範囲内の候補を優先する。
-    # すべて範囲外なら元の候補を返し、呼び出し側で除外する。
-    # 年月候補に格下げしない従来の挙動は維持する。
-    return next((c for c in candidates if is_plausible_expiry(c)), candidates[0])
+
+def extract_date_candidates(text):
+    """(確実に区切れた年月日, 末尾推測の年月日) を返す。
+
+    '27.05.25+E' は区切れた日付候補。
+    '27,05, 2546' は末尾の製造記号を数字と誤読した可能性があるため
+    推測候補にだけ入れる。推測は必ず人間が実物の印字を確認する。
+    """
+    text = normalize_ocr_text(text).upper()
+    exact = set()
+    inferred = set()
+
+    # 2桁/4桁の年と、月および2桁の日。曖昧な1桁の日は誤切り出しを避ける。
+    # 日本語の「年/月/日」にも対応する。
+    pattern = r"(?<![A-Z0-9])(20\d{2}|\d{2})[-./年](0?[1-9]|1[0-2])[-./月](\d{2})(\d{0,3})(?=$|[^0-9])"
+    for match in re.finditer(pattern, text):
+        candidate = _date_from_parts(match.group(1), match.group(2), match.group(3))
+        if not candidate:
+            continue
+        if match.group(4):
+            inferred.add(candidate)
+        else:
+            exact.add(candidate)
+
+    # 月日を二桁で連結した例: 2705.25
+    for match in re.finditer(r"(?<![0-9])(\d{2})(0[1-9]|1[0-2])[.\/-](\d{2})(?![0-9])",text):
+        candidate = _date_from_parts(*match.groups())
+        if candidate:
+            exact.add(candidate)
+
+    return exact, inferred
+
+
+def parse_expiry_date(text):
+    """互換性のため残す厳格な日付抽出。"""
+    exact, _ = extract_date_candidates(text)
+    return sorted(exact)[0] if len(exact) == 1 else None
 
 
 def parse_expiry_month(text):
@@ -186,183 +205,193 @@ def get_product(jan_code):
 
 @app.route("/ocr", methods=["POST"])
 def ocr():
+    """複数条件で読み、矛盾も返す。最終的な日付入力はブラウザで人が承認する。"""
     if "image" not in request.files:
         return jsonify({"error": "画像がありません"}), 400
 
     image_file = request.files["image"]
-    start_time = time.perf_counter()
-    print("受信した画像:", image_file.filename)
+    started = time.perf_counter()
+    print("受信した画像:", image_file.filename, flush=True)
 
     try:
-        image = Image.open(image_file.stream).convert("RGB")
-        original_width, original_height = image.size
+        # EXIFで回転している写真にも対応する
+        image = ImageOps.exif_transpose(Image.open(image_file.stream)).convert("RGB")
+        if min(image.size) < 40:
+            return jsonify({"error": "画像が小さすぎます。近づいて撮影してください"}), 400
+        if image.width * image.height > 16_000_000:
+            return jsonify({"error": "画像が大きすぎます。撮影範囲を小さくしてください"}), 400
 
-        # 画像全体は従来通りの前処理を行う
-        enlarged = image.resize(
-            (original_width * 3, original_height * 3), Image.Resampling.LANCZOS
-        )
-        gray = ImageOps.autocontrast(ImageOps.grayscale(enlarged))
-        soft = ImageEnhance.Contrast(gray).enhance(1.3)
-        soft = ImageEnhance.Sharpness(soft).enhance(1.2)
+        gray = ImageOps.grayscale(image)
+        # カメラガイド内の画像は上下に容器の縁が写る場合がある。
+        # 印字の周辺を切り出すパターンも用意し、元の全体画像と比較する。
+        roi = gray.crop((int(gray.width * 0.06), int(gray.height * 0.04),
+                         int(gray.width * 0.95), int(gray.height * 0.82)))
+        # 画像を拡大してドット印字を読み取りやすくする。
+        # 元画像の画素が存在しないものを推測で補うことはできない点に注意。
+        scale = 3 if max(image.size) < 800 else 2
+        enlarged = gray.resize((image.width * scale, image.height * scale), Image.Resampling.LANCZOS)
+        enhanced = ImageOps.autocontrast(enlarged)
+        sharp = ImageEnhance.Sharpness(enhanced).enhance(1.5)
+        medium = ImageEnhance.Contrast(enhanced).enhance(1.25)
+        roi_enlarged = roi.resize((roi.width * scale, roi.height * scale), Image.Resampling.LANCZOS)
+        roi_enhanced = ImageOps.autocontrast(roi_enlarged)
+        # 二値化も追加で試す。ドット印字では白黒化が逆効果のこともあるため、
+        # 元画像・グレー画像と独立した候補として扱う。
+        histogram = roi_enhanced.histogram()
+        pixels = sum(histogram)
+        sum_all = sum(i * count for i, count in enumerate(histogram))
+        weight_bg = 0
+        sum_bg = 0
+        best_score = -1
+        threshold = 128
+        for intensity, count in enumerate(histogram):
+            weight_bg += count
+            if not weight_bg or weight_bg == pixels:
+                continue
+            sum_bg += intensity * count
+            weight_fg = pixels - weight_bg
+            mean_bg = sum_bg / weight_bg
+            mean_fg = (sum_all - sum_bg) / weight_fg
+            score = weight_bg * weight_fg * (mean_bg - mean_fg) ** 2
+            if score > best_score:
+                best_score = score
+                threshold = intensity
+        roi_binary = roi_enhanced.point(lambda p: 255 if p > threshold else 0)
 
-        width, height = soft.size
-        center = soft.crop(
-            (
-                int(width * 0.08),
-                int(height * 0.18),
-                int(width * 0.92),
-                int(height * 0.82),
-            )
-        )
-
-        # ドット印字は拡大・強調で逆に読みにくくなる場合があるため、
-        # 元画像の左寄り中央帯（年月部分）も別途OCRにかける。
-        # ※年月は確定日付ではないので、フロント側での確認が必須。
-        original_gray = ImageOps.grayscale(image)
-        # 年月部分を広めに切り抜く
-        year_month_area = original_gray.crop(
-            (
-                int(original_width * 0.10),
-                int(original_height * 0.25),
-                int(original_width * 0.95),
-                int(original_height * 0.75),
-            )
-        )
-
-        # 年月の印字全体を確認するための広い切り抜き
-        year_month_wide = original_gray.crop(
-            (
-                int(original_width * 0.05),
-                int(original_height * 0.05),
-                int(original_width * 0.95),
-                int(original_height * 0.90),
-            )
-        )
-
-        # 日付用の画像処理を追加（比較用）
-        date_image = ImageOps.grayscale(image)
-        date_image = date_image.resize(
-            (original_width * 3, original_height * 3),
-            Image.Resampling.LANCZOS,
-        )
-        date_image = ImageOps.autocontrast(date_image)
-        date_image = ImageEnhance.Contrast(date_image).enhance(1.5)
-
-        # 白黒を反転した画像（比較用）
-        inverted = ImageOps.invert(center)
-
-        # OCR実行パターン（白黒反転を含む6回の比較テスト）
-        image_variants = [
-            (
-                "date-enhanced",
-                date_image,
-                (7,),
-                "eng",
-                " -c tessedit_char_whitelist=0123456789./-",
-            ),
-            ("trim-medium", center, (8,), "jpn+eng", ""),
-            ("trim-inverted", inverted, (7, 8), "eng", ""),
-            (
-                "yearmonth-left",
-                year_month_area,
-                (8,),
-                "eng",
-                " -c tessedit_char_whitelist=0123456789.,/-",
-            ),
-            ("yearmonth-wide", year_month_wide, (8,), "jpn+eng", ""),
+        # 日付の直後に製造記号 (+E 等) が続くことがある。
+        # 右端を数段階切った画像をそれぞれOCRし、両者が食い違う場合も検出する。
+        variants = [
+            ("original", enlarged, 13, "eng"),
+            ("enhanced", enhanced, 8, "eng"),
+            ("sharp", sharp, 13, "eng"),
+            ("contrast", medium, 13, "eng"),
+            ("roi-original", roi_enlarged, 13, "eng"),
+            ("roi-contrast", roi_enhanced, 8, "eng"),
+            ("roi-binary", roi_binary, 13, "eng"),
         ]
+        w, h = roi_enhanced.size
+        # カメラのガイド枠内に日付が収まる撮影を想定して、末尾の製造記号を削る。
+        # いずれも同じ画像由来のため、多数一致しても絶対的な正確性は保証しない。
+        for fraction in (0.67, 0.70, 0.73, 0.77, 0.82):
+            cut = roi_enhanced.crop((0, 0, max(1, int(w * fraction)), h))
+            variants.append((f"right-{fraction:.2f}", cut, 13, "eng"))
 
-        date_counts = {}
+        # 年月日の印字が小さい画像で上下切り詰めが役立つ場合がある。
+        variants.append(("center-band", sharp.crop((0, int(h * 0.10), w, int(h * 0.90))), 8, "eng"))
+
+        exact_counts = {}
+        inferred_counts = {}
         month_counts = {}
-        ocr_results = []
-
-        for variant_name, variant_image, psm_modes, language, options in image_variants:
-            border = 8 if variant_name in ("yearmonth-left", "yearmonth-wide") else 20
-            variant_image = ImageOps.expand(variant_image, border=border, fill=255)
-
-            for psm in psm_modes:
-                ocr_start = time.perf_counter()
+        raw_texts = []
+        # 全passが同じTesseractのため独立した複数OCRエンジンの合意ではない。
+        for variant_name, variant_image, psm, language in variants:
+            white_border = ImageOps.expand(variant_image, border=18, fill=255)
+            t0 = time.perf_counter()
+            try:
                 recognized_text = pytesseract.image_to_string(
-                    variant_image, lang=language, config=f"--psm {psm}{options}"
+                    white_border,
+                    lang=language,
+                    config=(f"--psm {psm} "
+                            "-c tessedit_char_whitelist=0123456789./-+E年月日 "
+                            "-c load_system_dawg=0 -c load_freq_dawg=0"),
+                    timeout=12,
                 ).strip()
-                ocr_elapsed = time.perf_counter() - ocr_start
+            except (RuntimeError, pytesseract.TesseractError) as error:
+                print(f"OCR [{variant_name}] 失敗:", error, flush=True)
+                continue
+            print(f"OCR [{variant_name} / psm {psm}]: {recognized_text!r} "
+                  f"({time.perf_counter()-t0:.2f}秒)", flush=True)
+            if recognized_text:
+                raw_texts.append(recognized_text)
 
-                print(
-                    f"OCR処理時間 [{variant_name} / psm {psm}]: "
-                    f"{ocr_elapsed:.2f}秒",
-                    flush=True,
-                )
-                print(f"OCR [{variant_name} / psm {psm}]:", repr(recognized_text))
+            exact, inferred = extract_date_candidates(recognized_text)
+            for candidate in exact:
+                exact_counts[candidate] = exact_counts.get(candidate, 0) + 1
+            for candidate in inferred:
+                inferred_counts[candidate] = inferred_counts.get(candidate, 0) + 1
 
-                if recognized_text:
-                    ocr_results.append(recognized_text)
+            # 日付らしい3つ目の数字があれば、年月のみへの格下げはしない
+            if exact or inferred:
+                continue
+            month = parse_expiry_month(recognized_text)
+            if month and is_plausible_expiry(month, month_only=True):
+                month_counts[month] = month_counts.get(month, 0) + 1
 
-                # 必ず年月日を先に解析。失敗時のみ年月候補として扱う
-                expiry_candidate = parse_expiry_date(recognized_text)
-                if expiry_candidate:
-                    if is_plausible_expiry(expiry_candidate):
-                        date_counts[expiry_candidate] = (
-                            date_counts.get(expiry_candidate, 0) + 1
-                        )
-                    else:
-                        print("範囲外の日付候補を除外:", expiry_candidate, flush=True)
-                    # 範囲外でも、年月候補に格下げせず次の認識結果へ。
+        # 英数のみでまったく読み取れない場合だけ従来の日本語モデルを追加。
+        if not (exact_counts or inferred_counts or month_counts):
+            for variant_name, variant_image in (("jpn-original", enhanced), ("jpn-center", sharp)):
+                try:
+                    recognized_text = pytesseract.image_to_string(
+                        ImageOps.expand(variant_image, border=18, fill=255),
+                        lang="jpn+eng", config="--psm 8", timeout=12,
+                    ).strip()
+                except (RuntimeError, pytesseract.TesseractError) as error:
+                    print("OCR日本語フォールバック失敗:", error, flush=True)
                     continue
+                print(f"OCR [{variant_name}]: {recognized_text!r}", flush=True)
+                if recognized_text:
+                    raw_texts.append(recognized_text)
+                exact, inferred = extract_date_candidates(recognized_text)
+                for candidate in exact:
+                    exact_counts[candidate] = exact_counts.get(candidate, 0) + 1
+                for candidate in inferred:
+                    inferred_counts[candidate] = inferred_counts.get(candidate, 0) + 1
+                if not (exact or inferred):
+                    month = parse_expiry_month(recognized_text)
+                    if month and is_plausible_expiry(month, month_only=True):
+                        month_counts[month] = month_counts.get(month, 0) + 1
 
-                month_candidate = parse_expiry_month(recognized_text)
-                # 年/月の漢字が「8」等に化けた場合の限定的な救済策。
-                # ほかの画像領域には適用しない。
-                if not month_candidate and variant_name == "yearmonth-wide":
-                    month_candidate = parse_expiry_month_fuzzy(recognized_text)
-                    if month_candidate:
-                        print("年月の要確認候補 [wide]:", month_candidate, flush=True)
-                if month_candidate:
-                    if is_plausible_expiry(month_candidate, month_only=True):
-                        month_counts[month_candidate] = (
-                            month_counts.get(month_candidate, 0) + 1
-                        )
-                    else:
-                        print("範囲外の年月候補を除外:", month_candidate, flush=True)
+        # その日の証拠の種類と支持回数で並べる。推測を確定扱いしない。
+        all_days = sorted(set(exact_counts) | set(inferred_counts),
+                          key=lambda k: (-(exact_counts.get(k, 0) + inferred_counts.get(k, 0)),
+                                         -exact_counts.get(k, 0), k))
+        suggested_date = None
+        exact_date = None
+        month_date = None
+        warning = ""
+        certainty = "none"
+        if all_days:
+            winner = all_days[0]
+            conflicts = len(all_days) > 1
+            if exact_counts.get(winner, 0) >= 2 and not conflicts:
+                exact_date = winner
+                certainty = "review_required"
+            else:
+                suggested_date = winner
+                certainty = "uncertain"
+            if conflicts:
+                warning = "複数の異なる日付を認識しました。必ず実物を確認してください。"
+            elif exact_counts.get(winner, 0) == 0:
+                warning = "末尾の文字を補正した推定値です。実物との照合が必要です。"
+        elif len(month_counts) == 1:
+            # 3つ目の日付要素を認識していない場合のみ「年月のみ」を提示する。
+            month_date = next(iter(month_counts))
+            certainty = "month_only"
+        elif len(month_counts) > 1:
+            warning = "年月候補が複数あります。手動で入力してください。"
 
-        expiry = None
-        expiry_month = None
-        expiry_precision = None
-        needs_confirmation = False
+        print("日付確定形の候補:", exact_counts, flush=True)
+        print("日付末尾補正候補:", inferred_counts, flush=True)
+        print("年月候補:", month_counts, flush=True)
+        print("提案した日付:", exact_date or suggested_date, flush=True)
+        print(f"処理時間: {time.perf_counter()-started:.2f}秒", flush=True)
 
-        if date_counts:
-            expiry = max(date_counts, key=date_counts.get)
-            expiry_precision = "day"
-        elif month_counts:
-            expiry_month = max(month_counts, key=month_counts.get)
-            expiry_precision = "month"
-            needs_confirmation = True
-
-        print("日付候補:", date_counts)
-        print("年月候補:", month_counts)
-        print("採用した賞味期限:", expiry)
-        print("年月のみの候補:", expiry_month)
-        print(
-            f"OCR全体の処理時間: {time.perf_counter() - start_time:.2f}秒",
-            flush=True,
-        )
-
-        # expiry は従来通り YYYY-MM-DD または null のみ。
-        # 日のない日付を勝手に1日/末日として登録しない。
-        return jsonify(
-            {
-                "name": "",
-                "expiry": expiry,
-                "expiry_month": expiry_month,
-                "expiry_precision": expiry_precision,
-                "needs_confirmation": needs_confirmation,
-                "text": ocr_results[-1] if ocr_results else "",
-                "ocr_texts": ocr_results,
-            }
-        )
-
+        return jsonify({
+            "name": "",
+            "expiry": exact_date,
+            "expiry_suggestion": suggested_date,
+            "expiry_month": month_date,
+            "expiry_precision": "day" if all_days else ("month" if month_date else None),
+            "needs_confirmation": True,
+            "expiry_confidence": certainty,
+            "expiry_warning": warning,
+            "date_candidates": all_days[:5],
+            "text": raw_texts[-1] if raw_texts else "",
+            "ocr_texts": raw_texts,
+        })
     except Exception as error:
-        print("OCRエラー:", error)
-        return jsonify({"error": str(error)}), 500
+        print("OCRエラー:", error, flush=True)
+        return jsonify({"error": "OCR処理でエラーが発生しました"}), 500
 
 
 if __name__ == "__main__":
