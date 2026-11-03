@@ -15,7 +15,7 @@ import {
 } from './form.js'
 
 import { setupCamera } from './camera.js'
-import { setupOcr } from './ocr-handler.js'
+import { setupOcr } from './ocr-handler.js?v=20261103accuracy1'
 import { setupBarcodeScanner } from './barcode.js?v=20261027diag1'
 
 import {
