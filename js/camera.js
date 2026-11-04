@@ -22,7 +22,7 @@ const autoScanStatus = document.getElementById('autoScanStatus')
 const cameraSelectRow = document.getElementById('cameraSelectRow')
 const cameraSelect = document.getElementById('cameraSelect')
 
-const AUTO_OCR_ENABLED = false
+const AUTO_OCR_ENABLED = true
 
 let cameraStream = null
 let selectedCameraId = ''
