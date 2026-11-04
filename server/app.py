@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from PIL import Image, ImageOps, ImageEnhance
+from PIL import Image, ImageOps
 import pytesseract
 import re
 import calendar
@@ -221,18 +221,25 @@ def ocr():
         if image.width * image.height > 16_000_000:
             return jsonify({"error": "画像が大きすぎます。撮影範囲を小さくしてください"}), 400
 
+        # 画像が大きい場合はOCR用に縮小してメモリ使用量を抑える。
+        # 元画像自体は保存せず、このリクエスト内だけで利用する。
         gray = ImageOps.grayscale(image)
+        del image
+        max_side = 1800
+        if max(gray.size) > max_side:
+            gray.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+
         # カメラガイド内の画像は上下に容器の縁が写る場合がある。
         # 印字の周辺を切り出すパターンも用意し、元の全体画像と比較する。
         roi = gray.crop((int(gray.width * 0.06), int(gray.height * 0.04),
                          int(gray.width * 0.95), int(gray.height * 0.82)))
         # 画像を拡大してドット印字を読み取りやすくする。
         # 元画像の画素が存在しないものを推測で補うことはできない点に注意。
-        scale = 3 if max(image.size) < 800 else 2
-        enlarged = gray.resize((image.width * scale, image.height * scale), Image.Resampling.LANCZOS)
+        # 小さい画像だけ拡大する。元から大きい画像の2倍拡大は避ける。
+        longest_side = max(gray.size)
+        scale = 3 if longest_side < 700 else (2 if longest_side < 1200 else 1)
+        enlarged = gray.resize((gray.width * scale, gray.height * scale), Image.Resampling.LANCZOS)
         enhanced = ImageOps.autocontrast(enlarged)
-        sharp = ImageEnhance.Sharpness(enhanced).enhance(1.5)
-        medium = ImageEnhance.Contrast(enhanced).enhance(1.25)
         roi_enlarged = roi.resize((roi.width * scale, roi.height * scale), Image.Resampling.LANCZOS)
         roi_enhanced = ImageOps.autocontrast(roi_enlarged)
         # 二値化も追加で試す。ドット印字では白黒化が逆効果のこともあるため、
@@ -258,26 +265,17 @@ def ocr():
                 threshold = intensity
         roi_binary = roi_enhanced.point(lambda p: 255 if p > threshold else 0)
 
-        # 日付の直後に製造記号 (+E 等) が続くことがある。
-        # 右端を数段階切った画像をそれぞれOCRし、両者が食い違う場合も検出する。
+        # 処理負荷を抑えるため、特徴の異なる5パターンに絞る。
+        # 製造記号が日付の末尾につく場合に備え、右端切り落としも1回試す。
+        w, h = roi_enhanced.size
+        right_cut = roi_enhanced.crop((0, 0, max(1, int(w * 0.77)), h))
         variants = [
             ("original", enlarged, 13, "eng"),
-            ("enhanced", enhanced, 8, "eng"),
-            ("sharp", sharp, 13, "eng"),
-            ("contrast", medium, 13, "eng"),
             ("roi-original", roi_enlarged, 13, "eng"),
             ("roi-contrast", roi_enhanced, 8, "eng"),
             ("roi-binary", roi_binary, 13, "eng"),
+            ("right-0.77", right_cut, 13, "eng"),
         ]
-        w, h = roi_enhanced.size
-        # カメラのガイド枠内に日付が収まる撮影を想定して、末尾の製造記号を削る。
-        # いずれも同じ画像由来のため、多数一致しても絶対的な正確性は保証しない。
-        for fraction in (0.67, 0.70, 0.73, 0.77, 0.82):
-            cut = roi_enhanced.crop((0, 0, max(1, int(w * fraction)), h))
-            variants.append((f"right-{fraction:.2f}", cut, 13, "eng"))
-
-        # 年月日の印字が小さい画像で上下切り詰めが役立つ場合がある。
-        variants.append(("center-band", sharp.crop((0, int(h * 0.10), w, int(h * 0.90))), 8, "eng"))
 
         exact_counts = {}
         inferred_counts = {}
@@ -319,7 +317,7 @@ def ocr():
 
         # 英数のみでまったく読み取れない場合だけ従来の日本語モデルを追加。
         if not (exact_counts or inferred_counts or month_counts):
-            for variant_name, variant_image in (("jpn-original", enhanced), ("jpn-center", sharp)):
+            for variant_name, variant_image in (("jpn-original", enhanced),):
                 try:
                     recognized_text = pytesseract.image_to_string(
                         ImageOps.expand(variant_image, border=18, fill=255),
